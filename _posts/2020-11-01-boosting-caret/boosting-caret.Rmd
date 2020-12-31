@@ -1,5 +1,5 @@
 ---
-title: "Boosting-caret"
+title: "Boosting based on Caret"
 description: |
   A short description of the post.
 author:
