@@ -19,3 +19,19 @@ To give you a brief introduction of me,
 
 - [Visualization Ver. 1](https://leehoo1928.shinyapps.io/ggplot_Ver1/)
 - [Visualization Ver. 2](https://leehoo1928.shinyapps.io/ggplot_Ver2/)
+
+## Paper
+
+- [Estimation for a half-triangular distribution based on unified hybrid censored sample (2018)](https://www.dbpia.co.kr/Journal/articleDetail?nodeId=NODE07568231)
+
+- [Estimation of the exponentiated half-logistic distribution based on multiply Type-I hybrid censoring (2019)](http://www.csam.or.kr/journal/view.html?doi=10.29220/CSAM.2020.27.1.047)
+
+- ARIMA모형과 DLM을 이용한 테러 발생 건수 예측 (2020), Korean terrorism studies Review, 13, 102-114.
+
+- [Estimation for the half-logistic distribution based on multiply Type-II hybrid censoring (2020)](https://www.sciencedirect.com/science/article/abs/pii/S037843712030220X)
+
+- [Bayesian estimation for the exponential distribution based on generalized multiply Type-II hybrid censoring (2020)](http://www.csam.or.kr/journal/view.html?doi=10.29220/CSAM.2020.27.4.413)
+
+- [	New Approach for a Weibull Distribution under the Progressive Type-II Censoring Scheme (2020)](https://www.mdpi.com/2227-7390/8/10/1713)
+
+- [Estimation of the Rayleigh Distribution under Unified Hybrid Censoring (2021)](https://ajs.or.at/index.php/ajs/article/view/990)
