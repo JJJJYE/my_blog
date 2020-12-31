@@ -1,0 +1,21 @@
+---
+title: "About this blog"
+---
+
+# Yeongeun Jeon
+
+<center><img src="images/그림1.png" width="600" height="400"></center>
+
+Welcome to our blog! This is the personal blog of Yeongeun Jeon, coming to you from Korea. 
+This is where I'm going to record what I'm studying, especially the analyses using R. 
+
+To give you a brief introduction of me,
+
+- B.S. Statistics, Yeungnam University, Korea, 2018.02
+- Ph.D student from Yeungnam University, Korea.
+- Interests :  Mathematical statistics, Time series, Spatial statistics etc.
+
+## Project
+
+- [Visualization Ver. 1](https://leehoo1928.shinyapps.io/ggplot_Ver1/)
+- [Visualization Ver. 2](https://leehoo1928.shinyapps.io/ggplot_Ver2/)

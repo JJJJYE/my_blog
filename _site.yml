@@ -1,0 +1,28 @@
+name: "my_blog"
+title: "Y.E Jeon's Blog"
+description: |
+   My study records
+favicon: images/favicon.png   
+google_analytics: "G-RE46DP2X3F"
+creative_commons: CC BY
+output_dir: "docs"
+navbar:
+  logo: images/logo.png
+  right:
+    - text: "Home"
+      href: index.html
+    - text: "About"
+      href: about.html
+    - icon: fa fa-github
+      href: https://github.com/JJJJYE
+    - icon: fa fa-rss
+      href: index.xml  
+output: 
+   distill::distill_article:
+        css: styles.css
+        
+# collections:
+#   posts:
+#     disqus: distill
+#     share: [twitter, linkedin]
+#     citations: true
