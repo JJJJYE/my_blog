@@ -1,7 +1,7 @@
 ---
 title: "Boosting based on Caret"
 description: |
-  A short description of the post.
+   R code using caret package for various models of Boosting
 author:
   - name: Yeongeun Jeon
   - name: Jeongwook Lee
