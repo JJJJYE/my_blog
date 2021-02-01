@@ -5,14 +5,14 @@
       "title": "About this blog",
       "author": [],
       "contents": "\r\nYeongeun Jeon\r\n\r\n\r\nWelcome to our blog! This is the personal blog of Yeongeun Jeon, coming to you from Korea. This is where I’m going to record what I’m studying, especially the analyses using R.\r\nTo give you a brief introduction of me,\r\nB.S. Statistics, Yeungnam University, Korea, 2018.02\r\nPh.D student from Yeungnam University, Korea.\r\nInterests : Machine Learning, Time series, Spatial statistics etc.\r\nProject\r\nVisualization Ver. 1\r\nVisualization Ver. 2\r\nPaper\r\nEstimation for a half-triangular distribution based on unified hybrid censored sample (2018)\r\nEstimation of the exponentiated half-logistic distribution based on multiply Type-I hybrid censoring (2019)\r\nARIMA모형과 DLM을 이용한 테러 발생 건수 예측 (2020), Korean terrorism studies Review, 13, 102-114.\r\nEstimation for the half-logistic distribution based on multiply Type-II hybrid censoring (2020)\r\nBayesian estimation for the exponential distribution based on generalized multiply Type-II hybrid censoring (2020)\r\nNew Approach for a Weibull Distribution under the Progressive Type-II Censoring Scheme (2020)\r\nEstimation of the Rayleigh Distribution under Unified Hybrid Censoring (2021)\r\n\r\n\r\n\r\n",
-      "last_modified": "2021-02-02T01:05:52+09:00"
+      "last_modified": "2021-02-02T01:18:09+09:00"
     },
     {
       "path": "index.html",
       "title": "Posts",
       "author": [],
       "contents": "\r\n\r\n\r\n\r\n",
-      "last_modified": "2021-02-02T01:05:53+09:00"
+      "last_modified": "2021-02-02T01:18:10+09:00"
     }
   ],
   "collections": ["posts/posts.json"]

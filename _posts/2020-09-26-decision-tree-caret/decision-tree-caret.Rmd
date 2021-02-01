@@ -108,7 +108,7 @@ rtree.caret <- train(Personal.Loan~., data=UB.trd, method="rpart", trControl = f
 rtree.caret
 ```
 
-모수가 하나이기 때문에 `Grid Search` 방법으로 3개의 `CP` 값을 얻고 각 `CP`로 고정한 후 5-Fold-Cross Validation 방법으로 error값을 얻었다. `CP`가0.05일 때 정확도가 가장 높은 것을 알 수 있다. 아래는 `CP`가 0.05일 때 가장 좋으므로, `CP`의 탐색 범위를 조절한 코드이다.
+모수가 하나이기 때문에 `Grid Search` 방법으로 3개의 `CP` 값을 얻고 각 `CP`로 고정한 후 5-Fold-Cross Validation 방법으로 정확도를 얻었다. `CP`가0.05일 때 정확도가 가장 높은 것을 알 수 있다. 아래는 `CP`가 0.05일 때 가장 좋으므로, `CP`의 탐색 범위를 조절한 코드이다.
 
 ```{r}
 customGrid <- expand.grid(cp = seq(0.01,0.07, by=0.001))   # cp의 탐색 범위 
