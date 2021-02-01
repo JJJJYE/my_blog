@@ -1,7 +1,7 @@
 ---
 title: "Unbalanced Target"
 description: |
-  Solution  for unlanced categorical target.
+  Solution  for unlanced categorical target
 author:
   - name: Yeongeun Jeon
   - name: Jeongwook Lee

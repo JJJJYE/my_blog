@@ -88,7 +88,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
   <!--radix_placeholder_meta_tags-->
 <title>Y.E Jeon's Blog: Unbalanced Target</title>
 
-<meta property="description" itemprop="description" content="Solution  for unlanced categorical target."/>
+<meta property="description" itemprop="description" content="Solution  for unlanced categorical target"/>
 
 <link rel="license" href="https://creativecommons.org/licenses/by/4.0/"/>
 <link rel="icon" type="image/png" href="../../images/favicon.png"/>
@@ -103,20 +103,20 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
 <!--  https://developers.facebook.com/docs/sharing/webmasters#markup -->
 <meta property="og:title" content="Y.E Jeon&#39;s Blog: Unbalanced Target"/>
 <meta property="og:type" content="article"/>
-<meta property="og:description" content="Solution  for unlanced categorical target."/>
+<meta property="og:description" content="Solution  for unlanced categorical target"/>
 <meta property="og:locale" content="en_US"/>
 <meta property="og:site_name" content="Y.E Jeon&#39;s Blog"/>
 
 <!--  https://dev.twitter.com/cards/types/summary -->
 <meta property="twitter:card" content="summary"/>
 <meta property="twitter:title" content="Y.E Jeon&#39;s Blog: Unbalanced Target"/>
-<meta property="twitter:description" content="Solution  for unlanced categorical target."/>
+<meta property="twitter:description" content="Solution  for unlanced categorical target"/>
 
 <!--/radix_placeholder_meta_tags-->
   <!--radix_placeholder_rmarkdown_metadata-->
 
 <script type="text/json" id="radix-rmarkdown-metadata">
-{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["creative_commons","title","description","author","date","preview","categories","output"]}},"value":[{"type":"character","attributes":{},"value":["CC BY"]},{"type":"character","attributes":{},"value":["Unbalanced Target"]},{"type":"character","attributes":{},"value":["Solution  for unlanced categorical target."]},{"type":"list","attributes":{},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name"]}},"value":[{"type":"character","attributes":{},"value":["Yeongeun Jeon"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name"]}},"value":[{"type":"character","attributes":{},"value":["Jeongwook Lee"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name"]}},"value":[{"type":"character","attributes":{},"value":["Jung In Seo"]}]}]},{"type":"character","attributes":{},"value":["09-15-2020"]},{"type":"character","attributes":{},"value":["preview.PNG"]},{"type":"character","attributes":{},"value":["ML"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["distill::distill_article"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["toc"]}},"value":[{"type":"logical","attributes":{},"value":[true]}]}]}]}
+{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["creative_commons","title","description","author","date","preview","categories","output"]}},"value":[{"type":"character","attributes":{},"value":["CC BY"]},{"type":"character","attributes":{},"value":["Unbalanced Target"]},{"type":"character","attributes":{},"value":["Solution  for unlanced categorical target"]},{"type":"list","attributes":{},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name"]}},"value":[{"type":"character","attributes":{},"value":["Yeongeun Jeon"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name"]}},"value":[{"type":"character","attributes":{},"value":["Jeongwook Lee"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name"]}},"value":[{"type":"character","attributes":{},"value":["Jung In Seo"]}]}]},{"type":"character","attributes":{},"value":["09-15-2020"]},{"type":"character","attributes":{},"value":["preview.PNG"]},{"type":"character","attributes":{},"value":["ML"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["distill::distill_article"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["toc"]}},"value":[{"type":"logical","attributes":{},"value":[true]}]}]}]}
 </script>
 <!--/radix_placeholder_rmarkdown_metadata-->
   
@@ -459,15 +459,8 @@ d-title {
   top: 0;
 }
 
-/* adjust viewport for navbar height */
-/* helps vertically center bootstrap (non-distill) content */
-.min-vh-100 {
-  min-height: calc(100vh - 100px) !important;
-}
-
 </style>
 
-<script src="../../site_libs/jquery-1.11.3/jquery.min.js"></script>
 <link href="../../site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet"/>
 <link href="../../site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet"/>
 <script src="../../site_libs/headroom-0.9.4/headroom.min.js"></script>
@@ -580,9 +573,6 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
         },
         templates: {
           suggestion: function(suggestion) {
-            var img = suggestion.preview && Object.keys(suggestion.preview).length > 0
-              ? `<img src="${offsetURL(suggestion.preview)}"</img>`
-              : '';
             var html = `
               <div class="search-item">
                 <h3>${suggestion.title}</h3>
@@ -590,7 +580,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
                   ${suggestion.description}
                 </div>
                 <div class="search-item-preview">
-                  ${img}
+                  <img src="${suggestion.preview ? offsetURL(suggestion.preview) : ''}"</img>
                 </div>
               </div>
             `;
@@ -613,10 +603,6 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 </script>
 
 <style type="text/css">
-
-.nav-search {
-  font-size: x-small;
-}
 
 /* Algolioa Autocomplete */
 
@@ -3019,8 +3005,8 @@ distill-header .nav a {
 }
 </script>
   <!--radix_placeholder_site_in_header-->
-<script type="text/javascript" cookie-consent="tracking" async src="https://www.googletagmanager.com/gtag/js?id=G-RE46DP2X3F"></script>
-<script type="text/javascript" cookie-consent="tracking">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-RE46DP2X3F"></script>
+<script>
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
@@ -3166,7 +3152,7 @@ d-article div.sourceCode code, d-article pre code {
 <!--radix_placeholder_front_matter-->
 
 <script id="distill-front-matter" type="text/json">
-{"title":"Unbalanced Target","description":"Solution  for unlanced categorical target.","authors":[{"author":"Yeongeun Jeon","authorURL":"#","affiliation":"&nbsp;","affiliationURL":"#","orcidID":""},{"author":"Jeongwook Lee","authorURL":"#","affiliation":"&nbsp;","affiliationURL":"#","orcidID":""},{"author":"Jung In Seo","authorURL":"#","affiliation":"&nbsp;","affiliationURL":"#","orcidID":""}],"publishedDate":"2020-09-15T00:00:00.000+09:00","citationText":"Jeon, et al., 2020"}
+{"title":"Unbalanced Target","description":"Solution  for unlanced categorical target","authors":[{"author":"Yeongeun Jeon","authorURL":"#","affiliation":"&nbsp;","affiliationURL":"#","orcidID":""},{"author":"Jeongwook Lee","authorURL":"#","affiliation":"&nbsp;","affiliationURL":"#","orcidID":""},{"author":"Jung In Seo","authorURL":"#","affiliation":"&nbsp;","affiliationURL":"#","orcidID":""}],"publishedDate":"2020-09-15T00:00:00.000+09:00","citationText":"Jeon, et al., 2020"}
 </script>
 
 <!--/radix_placeholder_front_matter-->
@@ -3204,7 +3190,7 @@ d-article div.sourceCode code, d-article pre code {
   <a href="../../index.html#category:ML" class="dt-tag">ML</a>
 </div>
 <!--/radix_placeholder_categories-->
-<p><p>Solution for unlanced categorical target.</p></p>
+<p><p>Solution for unlanced categorical target</p></p>
 </div>
 
 <div class="d-byline">

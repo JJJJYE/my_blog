@@ -459,15 +459,8 @@ d-title {
   top: 0;
 }
 
-/* adjust viewport for navbar height */
-/* helps vertically center bootstrap (non-distill) content */
-.min-vh-100 {
-  min-height: calc(100vh - 100px) !important;
-}
-
 </style>
 
-<script src="../../site_libs/jquery-1.11.3/jquery.min.js"></script>
 <link href="../../site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet"/>
 <link href="../../site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet"/>
 <script src="../../site_libs/headroom-0.9.4/headroom.min.js"></script>
@@ -580,9 +573,6 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
         },
         templates: {
           suggestion: function(suggestion) {
-            var img = suggestion.preview && Object.keys(suggestion.preview).length > 0
-              ? `<img src="${offsetURL(suggestion.preview)}"</img>`
-              : '';
             var html = `
               <div class="search-item">
                 <h3>${suggestion.title}</h3>
@@ -590,7 +580,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
                   ${suggestion.description}
                 </div>
                 <div class="search-item-preview">
-                  ${img}
+                  <img src="${suggestion.preview ? offsetURL(suggestion.preview) : ''}"</img>
                 </div>
               </div>
             `;
@@ -613,10 +603,6 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 </script>
 
 <style type="text/css">
-
-.nav-search {
-  font-size: x-small;
-}
 
 /* Algolioa Autocomplete */
 
@@ -3019,8 +3005,8 @@ distill-header .nav a {
 }
 </script>
   <!--radix_placeholder_site_in_header-->
-<script type="text/javascript" cookie-consent="tracking" async src="https://www.googletagmanager.com/gtag/js?id=G-RE46DP2X3F"></script>
-<script type="text/javascript" cookie-consent="tracking">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-RE46DP2X3F"></script>
+<script>
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());

@@ -1,7 +1,7 @@
 ---
 title: "Model Evaluation"
 description: |
-   Method of model evaluation for categorical target.
+   Method of model evaluation for categorical target
 author:
   - name: Yeongeun Jeon
   - name: Jeongwook Lee

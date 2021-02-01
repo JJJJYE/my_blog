@@ -93,7 +93,10 @@ UB.ted <- UB[-ind$Resample1,]                         # Test Data
 
 ## **3-1. 모형 적합**
 
-Turn Parameter인 `cp`의 그리드를 조정하기 위해서 그리드를 조정해주지 않았을 때 결과를 참고하였다. 아래는 그리드를 조정해주지 않았을 때 기본적인 결과이다.
+<center><img src="./image/caret.png" width="600" height="200"></center>
+
+Turn Parameter인 `CP`의 그리드를 조정하기 위해서 그리드를 조정해주지 않았을 때 결과를 참고하였다. 아래는 그리드를 조정해주지 않았을 때 기본적인 결과이다. (`caret`에서 자동적으로 `xval = 0`이며, 최적의 cp를 이용하여 최종 모형을 적합하기 때문에 가지치기를 할 필요가 없다.)
+
 
 ```{r}
 fitControl <- trainControl(method="cv", number=5)    # 5-fold-cross validation
@@ -105,7 +108,7 @@ rtree.caret <- train(Personal.Loan~., data=UB.trd, method="rpart", trControl = f
 rtree.caret
 ```
 
-모수가 하나이기 때문에 3개의 `cp` 값을 랜덤적으로 보여주며, 0.05일 때 정확도가 가장 높은 것을 알 수 있다. 아래는 `cp`가 0.05일 때 가장 좋으므로, cp의 탐색 범위를 조절한 코드이다.
+모수가 하나이기 때문에 `Grid Search` 방법으로 3개의 `CP` 값을 얻고 각 `CP`로 고정한 후 5-Fold-Cross Validation 방법으로 error값을 얻었다. `CP`가0.05일 때 정확도가 가장 높은 것을 알 수 있다. 아래는 `CP`가 0.05일 때 가장 좋으므로, `CP`의 탐색 범위를 조절한 코드이다.
 
 ```{r}
 customGrid <- expand.grid(cp = seq(0.01,0.07, by=0.001))   # cp의 탐색 범위 
