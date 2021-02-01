@@ -446,8 +446,15 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
     top: 0;
   }
   
+  /* adjust viewport for navbar height */
+  /* helps vertically center bootstrap (non-distill) content */
+  .min-vh-100 {
+    min-height: calc(100vh - 100px) !important;
+  }
+  
   </style>
   
+  <script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
   <link href="site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet"/>
   <link href="site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet"/>
   <script src="site_libs/headroom-0.9.4/headroom.min.js"></script>
@@ -560,6 +567,9 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
           },
           templates: {
             suggestion: function(suggestion) {
+              var img = suggestion.preview && Object.keys(suggestion.preview).length > 0
+                ? `<img src="${offsetURL(suggestion.preview)}"</img>`
+                : '';
               var html = `
                 <div class="search-item">
                   <h3>${suggestion.title}</h3>
@@ -567,7 +577,7 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
                     ${suggestion.description}
                   </div>
                   <div class="search-item-preview">
-                    <img src="${suggestion.preview ? offsetURL(suggestion.preview) : ''}"</img>
+                    ${img}
                   </div>
                 </div>
               `;
@@ -590,6 +600,10 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
   </script>
   
   <style type="text/css">
+  
+  .nav-search {
+    font-size: x-small;
+  }
   
   /* Algolioa Autocomplete */
   
@@ -1988,14 +2002,13 @@ code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
   </script>
   
   <!--/radix_placeholder_distill-->
-  <script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
   <script src="site_libs/anchor-4.2.2/anchor.min.js"></script>
   <script src="site_libs/bowser-1.9.3/bowser.min.js"></script>
   <script src="site_libs/webcomponents-2.0.0/webcomponents.js"></script>
   <script src="site_libs/distill-2.2.21/template.v2.js"></script>
   <!--radix_placeholder_site_in_header-->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-RE46DP2X3F"></script>
-  <script>
+  <script type="text/javascript" cookie-consent="tracking" async src="https://www.googletagmanager.com/gtag/js?id=G-RE46DP2X3F"></script>
+  <script type="text/javascript" cookie-consent="tracking">
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
@@ -2307,6 +2320,63 @@ function init_posts_list() {
 <div class="posts-container posts-with-sidebar posts-apply-limit l-screen-inset">
 <div class="posts-list">
 <h1 class="posts-list-caption" data-caption="Posts">Posts</h1>
+<a href="posts/2021-01-03-bym-model2/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["Spatial Statistics"]}</script>
+<div class="metadata">
+<div class="publishedDate">Jan. 3, 2021</div>
+<div class="dt-authors">
+<div class="dt-author">Yeongeun Jeon</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="posts/2021-01-03-bym-model2/preview.PNG"/>
+</div>
+<div class="description">
+<h2>BYM Model with Risk Factor</h2>
+<div class="dt-tags">
+<div class="dt-tag">Spatial Statistics</div>
+</div>
+<p>BYM Model including risk factor in Statial Modeling</p>
+</div>
+</a>
+<a href="posts/2020-12-23-bymmodel/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["Spatial Statistics"]}</script>
+<div class="metadata">
+<div class="publishedDate">Dec. 23, 2020</div>
+<div class="dt-authors">
+<div class="dt-author">Yeongeun Jeon</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="posts/2020-12-23-bymmodel/preview.PNG"/>
+</div>
+<div class="description">
+<h2>BYM Model</h2>
+<div class="dt-tags">
+<div class="dt-tag">Spatial Statistics</div>
+</div>
+<p>BYM Model including only spatial effect in Statial Modeling</p>
+</div>
+</a>
+<a href="posts/2020-12-16-poissonregression/" class="post-preview">
+<script class="post-metadata" type="text/json">{"categories":["Spatial Statistics"]}</script>
+<div class="metadata">
+<div class="publishedDate">Dec. 16, 2020</div>
+<div class="dt-authors">
+<div class="dt-author">Yeongeun Jeon</div>
+</div>
+</div>
+<div class="thumbnail">
+<img src="posts/2020-12-16-poissonregression/preview.PNG"/>
+</div>
+<div class="description">
+<h2>Poisson Regression</h2>
+<div class="dt-tags">
+<div class="dt-tag">Spatial Statistics</div>
+</div>
+<p>Relative Risk for Poisson Regression</p>
+</div>
+</a>
 <a href="posts/2020-11-01-boosting-caret/" class="post-preview">
 <script class="post-metadata" type="text/json">{"categories":["ML"]}</script>
 <div class="metadata">
@@ -2360,7 +2430,7 @@ function init_posts_list() {
 </div>
 </div>
 <div class="thumbnail">
-<img src="posts/2020-10-16-bagging-caret/preview.PNG"/>
+<img data-src="posts/2020-10-16-bagging-caret/preview.PNG"/>
 </div>
 <div class="description">
 <h2>Bagging based on Caret</h2>
@@ -2381,7 +2451,7 @@ function init_posts_list() {
 </div>
 </div>
 <div class="thumbnail">
-<img src="posts/2020-10-15-bagging/preview.PNG"/>
+<img data-src="posts/2020-10-15-bagging/preview.PNG"/>
 </div>
 <div class="description">
 <h2>Bagging</h2>
@@ -2402,7 +2472,7 @@ function init_posts_list() {
 </div>
 </div>
 <div class="thumbnail">
-<img src="posts/2020-09-29-support-vector-caret/preview.PNG"/>
+<img data-src="posts/2020-09-29-support-vector-caret/preview.PNG"/>
 </div>
 <div class="description">
 <h2>Support Vector Machine based on Caret</h2>
@@ -2643,11 +2713,15 @@ function init_posts_list() {
 <ul>
 <li>
 <a href="#category:Articles">Articles</a>
-<span class="category-count">(16)</span>
+<span class="category-count">(19)</span>
 </li>
 <li>
 <a href="#category:ML">ML</a>
 <span class="category-count">(11)</span>
+</li>
+<li>
+<a href="#category:Spatial_Statistics">Spatial Statistics</a>
+<span class="category-count">(3)</span>
 </li>
 <li>
 <a href="#category:Time_Series">Time Series</a>

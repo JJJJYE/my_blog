@@ -13,7 +13,7 @@ To give you a brief introduction of me,
 
 - B.S. Statistics, Yeungnam University, Korea, 2018.02
 - Ph.D student from Yeungnam University, Korea.
-- Interests :  Mathematical statistics, Time series, Spatial statistics etc.
+- Interests :  Machine Learning, Time series, Spatial statistics etc.
 
 ## Project
 
