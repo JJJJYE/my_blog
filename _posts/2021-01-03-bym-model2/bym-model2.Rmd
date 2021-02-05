@@ -1,7 +1,7 @@
 ---
 title: "BYM Model with Risk Factor"
 description: |
-  BYM Model including risk factor in Statial Modeling 
+  BYM Model including risk factors in Statial Modeling 
 author:
   - name: Yeongeun Jeon
 date: 01-03-2021
@@ -26,9 +26,7 @@ options(width=200)
 
 
 
->INLA는 잠재 가우스 모형 (latent gaussian model)에 특화된 방법이며 복잡한 사후 분포를 단순화된 라플라스 근사치를 이용하고 적분을 유한개의 가중 합으로 계산하기 때문에 MCMC에 비해 비교적 짧은 계산시간에 정확한 결과를 제공한다는 이점이 있다. 이러한 장점을 이용하여 2019년 서울에서 발생한 강간강제추행을 분석하기 위해 [R-INLA (Integrated Nested Laplace Approximations)](https://www.r-inla.org/)를 적용해보았다. 
-
->이번에는 서울 강간강체주행범죄에 영향을 미칠 수 있는 요인으로 치안시설 수, 안심귀가스카우트 이용수, 여성인구비를 고려해보았다. 데이터는 [서울 열린데이터광장](https://data.seoul.go.kr/)에서 수집하였으며, BYM Model을 이용하여 공간 분석을 실시하였다. 
+>INLA는 잠재 가우스 모형 (latent gaussian model)에 특화된 방법이며 복잡한 사후 분포를 단순화된 라플라스 근사치를 이용하고 적분을 유한개의 가중 합으로 계산하기 때문에 MCMC에 비해 비교적 짧은 계산시간에 정확한 결과를 제공한다는 이점이 있다. 이러한 장점을 이용하여 2019년 서울에서 발생한 강간강제추행을 분석하기 위해 [R-INLA (Integrated Nested Laplace Approximations)](https://www.r-inla.org/)를 적용해보았다. 게다가 서울 강간강체주행범죄에 영향을 미칠 수 있는 요인으로 치안시설 수, 안심귀가스카우트 이용수, 여성인구비를 고려해보았다. 데이터는 [서울 열린데이터광장](https://data.seoul.go.kr/)에서 수집하였으며, BYM Model을 이용하여 공간 분석을 실시하였다. 
 
 --------
 
@@ -115,6 +113,7 @@ where $n_{i}$는 $i$ 번째 지역의 인구수. (참고 : [Bayesian Disease Map
 dat.2019$E <- sum(dat.2019$rape)/sum(dat.2019$pop_total)*dat.2019$pop_total
 ```
 
+------------
 
 ## **Adjacency Matrix**
 
@@ -158,7 +157,7 @@ dat.2019 <- dat.2019 %>%
 
 ----
 
-## **BYM Model **
+## **BYM Model**
 
 ### **BYM Model with Ecological regression**
 \begin{align*}
@@ -182,8 +181,8 @@ summary(bym)
 ```
 
 
-- $log(치안시설수)$가 1 증가할 때, 상대적으로 risk는 $\exp(0.441*1)=1.55$ 증가한다.
-- $log(안심귀가스카우트 이용수)$가 1 증가할 때, 상대적 위험은 $\exp(0.002*1)=1.00$ 증가한다.
+- $\log(치안시설수)$가 1 증가할 때, 상대적으로 risk는 $\exp(0.441*1)=1.55$ 증가한다.
+- $\log(안심귀가스카우트 이용수)$가 1 증가할 때, 상대적 위험은 $\exp(0.002*1)=1.00$ 증가한다.
 - 여성인구비가 0.01 증가할 때, 상대적 위험은 $\exp(8.878*0.01)=1.09$ 증가한다.
 
 
@@ -213,7 +212,7 @@ beta <- bym$marginals.fixed$ln_sec_fac
 1 - inla.pmarginal(0, beta)      # P(beta > b|y)
 ```
 
-&#10148; 치안시설 수에 대한 회귀계수의 Posterior probability가 80%이상이므로 치안시설 수는 강간강제추행에 유의하다. 즉, 치안시설수가 많은수록 강간강제추행은 늘어난다.
+&#10148; 치안시설 수에 대한 회귀계수의 Posterior probability가 80%이상이므로 치안시설 수는 강간강제추행에 유의하다. 즉, 치안시설수가 많은수록 강간강제추행의 위험은 증가한다.
 
 
 ```{r}
@@ -282,7 +281,7 @@ cat.zeta <- cut(unlist(zeta),breaks=zeta.cutoff,
 
 ##### **Exceedance probabilities**
 
-단순히 공간효과만 비교하는 것보다 초과 확률(Exceedance probabilities)을 비교하는 것도 용이하다. 왜냐하면 초과 확률은 불확실성(Uncertainty)을 고려하기 때문이다.
+단순히 공간효과만 비교하는 것보다 초과 확률(Exceedance probabilities)을 비교하는 것도 용이하다. 왜냐하면 초과 확률은 불확실성(Uncertainty)을 고려하기 때문이다. 또한, 단순히 점추정이 1이 넘는 지역이라도 불확실성을 고려한 posterior probability를 보면 cutoff value를 넘지 못할 수 있으며, 그 지역이 위험한 지역이라 선언하기 충분한 신뢰성이 없을 수 있다.
 
 ```{r}
 a        <- 0
@@ -300,7 +299,7 @@ cat.prob <- cut(unlist(prob.csi),breaks=prob.cutoff,
 
 -----------
 
-```{r, echo=FALSE}
+```{r}
 maps.cat.zeta <- data.frame(ESRI_PK=dat.2019$ESRI_PK, cat.zeta=cat.zeta, cat.prob=cat.prob)
 
 #Add the categorized zeta to the spatial polygon
@@ -369,7 +368,7 @@ spplot(obj=seoul.map, zcol= "cat.rr",sp.layout = spl,
 ```
 
 
-&#10148; $\rho_{i}$가 1 보다 크면, 위험요인과 공간효과를 고려했을 때 $i$번째 지역은 전체 지역보다 높은 위험 (risk) 을 가진다.
+&#10148; $\rho_{i}$가 1 보다 크면, 위험요인과 공간효과를 고려했을 때 $i$번째 지역은 `전체 지역보다 높은 위험` (risk) 을 가진다.
 
    - 한강을 기준으로 강남 지역이 강북 지역보다 높은 위험을 가지는 지역이 많다.
    - 강북 지역의 광진, 용산, 마포, 중구, 종로를 제외한 지역은 전체지역보다 낮은 위험을 가진다.
