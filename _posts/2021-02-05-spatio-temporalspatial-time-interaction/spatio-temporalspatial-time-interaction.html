@@ -2564,10 +2564,13 @@ y_{it} &amp;\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}
 </div>
 <hr />
 <h2 id="expected-case"><strong>Expected Case</strong></h2>
-<p>흔하게 사용하는 예상되는 수 (<span class="math inline">\(E\)</span>)는 <span class="math display">\[\begin{align*}
+<p>흔하게 사용하는 예상되는 수 (<span class="math inline">\(E_{it}\)</span>)는 <span class="math display">\[\begin{align*}
 E_{it} = n_{it}\frac{\sum_{t}\sum_{i} y_{it}}{\sum_{t}\sum_{i} n_{it}},
 \end{align*}\]</span></p>
-<p>where <span class="math inline">\(n_{i}\)</span>는 <span class="math inline">\(i\)</span> 번째 지역의 인구수. (참고 : <a href="https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424">Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology</a> p.293)</p>
+<ul>
+<li><span class="math inline">\(n_{it}\)</span>는 <span class="math inline">\(t\)</span>시점에서 <span class="math inline">\(i\)</span> 번째 지역의 인구수</li>
+</ul>
+<p>(참고 : <a href="https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424">Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology</a> p.293)</p>
 <div class="layout-chunk" data-layout="l-body">
 <div class="sourceCode">
 <pre><code><span class="va">dat</span><span class="op">$</span><span class="va">E</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">crime</span><span class="op">)</span><span class="op">/</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">pop_total</span><span class="op">)</span><span class="op">*</span><span class="va">dat</span><span class="op">$</span><span class="va">pop_total</span>
@@ -2636,7 +2639,7 @@ Call:
    E = E, &quot;, &quot; lincomb = lcs, control.compute = list(dic = TRUE), 
    control.predictor = list(compute = TRUE))&quot; ) 
 Time used:
-    Pre = 0.641, Running = 0.604, Post = 0.114, Total = 1.36 
+    Pre = 0.878, Running = 0.68, Post = 0.146, Total = 1.7 
 Fixed effects:
              mean    sd 0.025quant 0.5quant 0.975quant  mode kld
 (Intercept) 0.022 0.073     -0.123    0.022      0.167 0.022   0
@@ -2776,7 +2779,7 @@ Call:
    E = E, &quot;, &quot; lincomb = lcs, control.compute = list(dic = TRUE), 
    control.predictor = list(compute = TRUE))&quot; ) 
 Time used:
-    Pre = 0.409, Running = 12.7, Post = 0.107, Total = 13.2 
+    Pre = 0.59, Running = 16.3, Post = 0.132, Total = 17 
 Fixed effects:
               mean       sd 0.025quant 0.5quant 0.975quant   mode kld
 (Intercept) -0.013 23170.47  -45491.54   -0.665   45453.26 -0.013   0
@@ -2911,7 +2914,7 @@ Call:
    dat, E = E, &quot;, &quot; lincomb = lcs, control.compute = list(dic = 
    TRUE), control.predictor = list(compute = TRUE))&quot; ) 
 Time used:
-    Pre = 0.464, Running = 8.05, Post = 0.0993, Total = 8.61 
+    Pre = 0.638, Running = 9.88, Post = 0.143, Total = 10.7 
 Fixed effects:
              mean    sd 0.025quant 0.5quant 0.975quant  mode kld
 (Intercept) 0.011 0.641     -1.247    0.011      1.267 0.011   0
@@ -3043,7 +3046,7 @@ Call:
    E = E, &quot;, &quot; lincomb = lcs, control.compute = list(dic = TRUE), 
    control.predictor = list(compute = TRUE))&quot; ) 
 Time used:
-    Pre = 0.451, Running = 0.851, Post = 0.102, Total = 1.4 
+    Pre = 0.71, Running = 1.1, Post = 0.111, Total = 1.92 
 Fixed effects:
              mean    sd 0.025quant 0.5quant 0.975quant  mode kld
 (Intercept) 0.022 0.014     -0.007    0.022      0.051 0.022   0

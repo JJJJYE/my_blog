@@ -2640,7 +2640,7 @@ Call:
    = TRUE, cpo = TRUE), &quot;, &quot; control.predictor = list(compute = 
    TRUE))&quot;) 
 Time used:
-    Pre = 0.774, Running = 0.86, Post = 0.169, Total = 1.8 
+    Pre = 0.746, Running = 1.01, Post = 0.121, Total = 1.88 
 Fixed effects:
                      mean     sd 0.025quant 0.5quant 0.975quant
 (Intercept)        -5.887  6.765    -19.176   -5.916      7.546
@@ -2766,8 +2766,8 @@ Posterior marginals for the linear predictor and
 </code></pre>
 </div>
 </div>
-<p>➤ BYM Model은 <span class="math inline">\(\xi=u_{i}+v_{i}\)</span> 와 <span class="math inline">\(u_{i}\)</span>를 모수화기 때문에 <code>marginals.random$ID.area</code>의 총 2K개가 존재한다.</p>
-<p>➤ 우리가 관심있는 것은 <span class="math inline">\(\xi=u_{i}+v_{i}\)</span>이므로 <code>marginals.random$ID.area[1:25]</code>를 추출한다.</p>
+<p>➤ BYM Model은 <span class="math inline">\(\xi_{i}=u_{i}+v_{i}\)</span> 와 <span class="math inline">\(u_{i}\)</span>를 모수화기 때문에 <code>marginals.random$ID.area</code>의 총 2K개가 존재한다.</p>
+<p>➤ 우리가 관심있는 것은 <span class="math inline">\(\xi_{i}=u_{i}+v_{i}\)</span>이므로 <code>marginals.random$ID.area[1:25]</code>를 추출한다.</p>
 <hr />
 <h5 id="exceedance-probabilities"><strong>Exceedance probabilities</strong></h5>
 <p>단순히 공간효과만 비교하는 것보다 초과 확률(Exceedance probabilities)을 비교하는 것도 용이하다. 왜냐하면 초과 확률은 불확실성(Uncertainty)을 고려하기 때문이다. 또한, 단순히 점추정이 1이 넘는 지역이라도 불확실성을 고려한 posterior probability를 보면 cutoff value를 넘지 못할 수 있으며, 그 지역이 위험한 지역이라 선언하기 충분한 신뢰성이 없을 수 있다.</p>
@@ -2784,7 +2784,7 @@ Posterior marginals for the linear predictor and
 </code></pre>
 </div>
 </div>
-<p>➤ <span class="math inline">\(P(\exp(\xi&gt;1)\vert Y) = P(\xi&gt;0\vert Y)\)</span>.</p>
+<p>➤ <span class="math inline">\(P(\exp(\xi_{i}&gt;1)\vert Y) = P(\xi_{i}&gt;0\vert Y)\)</span>.</p>
 <hr />
 <div class="layout-chunk" data-layout="l-body">
 <div class="sourceCode">
@@ -2894,7 +2894,7 @@ Call:
    = TRUE, cpo = TRUE), &quot;, &quot; control.predictor = list(compute = 
    TRUE), control.fixed = prior.fixed)&quot; ) 
 Time used:
-    Pre = 0.493, Running = 0.921, Post = 0.0919, Total = 1.51 
+    Pre = 0.532, Running = 0.919, Post = 0.102, Total = 1.55 
 Fixed effects:
                      mean    sd 0.025quant 0.5quant 0.975quant   mode
 (Intercept)        -1.121 2.738     -6.474   -1.131      4.282 -1.150

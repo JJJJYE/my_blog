@@ -275,9 +275,9 @@ cat.zeta <- cut(unlist(zeta),breaks=zeta.cutoff,
                 include.lowest=TRUE)
 ```
 
-&#10148; BYM Model은 $\xi=u_{i}+v_{i}$ 와 $u_{i}$를 모수화기 때문에 `marginals.random$ID.area`의 총 2K개가 존재한다.
+&#10148; BYM Model은 $\xi_{i}=u_{i}+v_{i}$ 와 $u_{i}$를 모수화기 때문에 `marginals.random$ID.area`의 총 2K개가 존재한다.
 
-&#10148; 우리가 관심있는 것은 $\xi=u_{i}+v_{i}$이므로  `marginals.random$ID.area[1:25]`를 추출한다.
+&#10148; 우리가 관심있는 것은 $\xi_{i}=u_{i}+v_{i}$이므로  `marginals.random$ID.area[1:25]`를 추출한다.
 
 --------
 
@@ -297,7 +297,7 @@ cat.prob <- cut(unlist(prob.csi),breaks=prob.cutoff,
 
 ```
 
-&#10148; $P(\exp(\xi>1)\vert Y) = P(\xi>0\vert Y)$. 
+&#10148; $P(\exp(\xi_{i}>1)\vert Y) = P(\xi_{i}>0\vert Y)$. 
 
 -----------
 
