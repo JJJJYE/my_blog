@@ -135,7 +135,7 @@ moran.test(dat.2019$rape,seoul.listw)
 
 ## **Expected Case**
 
-흔하게 사용하는 예상되는 수 ($E$)는 
+흔하게 사용하는 예상되는 수 ($E_{i}$)는 
 \begin{align*}
 E_{i} = n_{i}\frac{\sum y_{i}}{\sum n_{i}},
 \end{align*}
