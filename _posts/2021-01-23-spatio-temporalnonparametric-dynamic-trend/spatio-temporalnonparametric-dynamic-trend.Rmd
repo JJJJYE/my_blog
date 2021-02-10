@@ -37,7 +37,7 @@ y_{it} &\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}\\
 - $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
 - $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
 - $\gamma_{t}$ : 구조화된 시간 효과 (Structured time effect)이며, dynamically 모형화
-- $\\phi_{t}$ : 비구조화된 시간 효과 (Unstructured time effect)
+- $\phi_{t}$ : 비구조화된 시간 효과 (Unstructured time effect)
 
 &#10148; **Nonparametric Dynamic Trend는 선형성 조건을 완하하기 위하여 Dynamic nonparametric 형태를 취한다.**
 
@@ -168,12 +168,14 @@ seoul.mat   <- nb2mat(seoul.nb)        # Generates a weights matrix for a neighb
 
 ## **Expected Case**
 
-흔하게 사용하는 예상되는 수 ($E$)는 
+흔하게 사용하는 예상되는 수 ($E_{it}$)는 
 \begin{align*}
 E_{it} = n_{it}\frac{\sum_{t}\sum_{i} y_{it}}{\sum_{t}\sum_{i} n_{it}},
 \end{align*}
 
-where $n_{i}$는 $i$ 번째 지역의 인구수. (참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.293)
+- $n_{it}$는 $t$시점에서 $i$ 번째 지역의 인구수
+
+(참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.293)
 
 ```{r}
 dat$E <- sum(dat$crime)/sum(dat$pop_total)*dat$pop_total
@@ -419,7 +421,7 @@ spplot(obj=seoul.map, zcol= c("rr.2017", "rr.2018", "rr.2019"),
 ```
 
 
-&#10148; $\rho_{i}$가 1 보다 크면, 공간효과와 시간효과를 고려했을 때, $t$년도의 $i$번째 지역은 전체 지역의 평균(전체 연구기간에 걸쳐서)보다 높은 위험 (risk) 을 가진다.
+&#10148; $\rho_{it}$가 1 보다 크면, 공간효과와 시간효과를 고려했을 때, $t$년도의 $i$번째 지역은 전체 지역의 평균(전체 연구기간에 걸쳐서)보다 높은 위험 (risk) 을 가진다.
 
    - 연구기간에 상관없이 중구가 가장 높은 위험을 가진다.
    - 2018년은 2017년에 비해 옅은 색깔이 증가하였다.

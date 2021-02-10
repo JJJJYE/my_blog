@@ -140,7 +140,9 @@ moran.test(dat.2019$rape,seoul.listw)
 E_{i} = n_{i}\frac{\sum y_{i}}{\sum n_{i}},
 \end{align*}
 
-where $n_{i}$는 $i$ 번째 지역의 인구수. (참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.85)
+- $n_{i}$ : $i$ 번째 지역의 인구수
+
+(참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.85)
 
 ```{r}
 dat.2019$E <- sum(dat.2019$rape)/sum(dat.2019$pop_total)*dat.2019$pop_total

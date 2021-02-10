@@ -3351,7 +3351,10 @@ Moran I statistic       Expectation          Variance
 <p>흔하게 사용하는 예상되는 수 (<span class="math inline">\(E\)</span>)는 <span class="math display">\[\begin{align*}
 E_{i} = n_{i}\frac{\sum y_{i}}{\sum n_{i}},
 \end{align*}\]</span></p>
-<p>where <span class="math inline">\(n_{i}\)</span>는 <span class="math inline">\(i\)</span> 번째 지역의 인구수. (참고 : <a href="https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424">Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology</a> p.85)</p>
+<ul>
+<li><span class="math inline">\(n_{i}\)</span> : <span class="math inline">\(i\)</span> 번째 지역의 인구수</li>
+</ul>
+<p>(참고 : <a href="https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424">Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology</a> p.85)</p>
 <div class="layout-chunk" data-layout="l-body">
 <div class="sourceCode">
 <pre><code><span class="va">dat.2019</span><span class="op">$</span><span class="va">E</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">dat.2019</span><span class="op">$</span><span class="va">rape</span><span class="op">)</span><span class="op">/</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">dat.2019</span><span class="op">$</span><span class="va">pop_total</span><span class="op">)</span><span class="op">*</span><span class="va">dat.2019</span><span class="op">$</span><span class="va">pop_total</span>
@@ -3408,7 +3411,7 @@ Call:
    = TRUE, cpo = TRUE), &quot;, &quot; control.predictor = list(compute = 
    TRUE))&quot;) 
 Time used:
-    Pre = 0.434, Running = 0.611, Post = 0.069, Total = 1.11 
+    Pre = 0.596, Running = 0.823, Post = 0.0954, Total = 1.51 
 Fixed effects:
               mean    sd 0.025quant 0.5quant 0.975quant   mode kld
 (Intercept) -0.066 0.105     -0.274   -0.066      0.142 -0.066   0
@@ -3616,7 +3619,7 @@ Call:
    = TRUE, cpo = TRUE), &quot;, &quot; control.predictor = list(compute = 
    TRUE))&quot;) 
 Time used:
-    Pre = 0.415, Running = 0.546, Post = 0.0617, Total = 1.02 
+    Pre = 0.44, Running = 0.719, Post = 0.096, Total = 1.26 
 Fixed effects:
               mean    sd 0.025quant 0.5quant 0.975quant   mode kld
 (Intercept) -0.066 0.096     -0.258   -0.066      0.125 -0.066   0

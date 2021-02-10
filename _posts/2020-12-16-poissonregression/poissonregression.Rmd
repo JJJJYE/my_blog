@@ -31,9 +31,12 @@ y_{i} &\thicksim Poisson(\lambda_{i}), \;\; \lambda_{i} = E(y_{i})\\
 \beta_{j}  &\thicksim Normal
 \end{align*}
 
-- $\exp(\beta_{0})$ : 평균 사건 수 
-- $\exp(\beta_{j})$ : x_{ji}이 1 증가할 때 $y$의 평균 변화
-
+- $\exp(\beta_{0})$ 
+  - 수치형 : 예측변수들이 0일 때 평균 사건 수 
+  - 범주형 :  Reference Category일 때 평균 사건 수
+- $\exp(\beta_{j})$ 
+  - 예측변수들이 1단위 변화할 때 $y$의 평균 변화 
+  
 -----
 
 ## **Relative Risk**
@@ -51,9 +54,14 @@ y_{i} &\thicksim Poisson(\lambda_{i}), \;\; \lambda_{i} = E_{i}\rho_{i}\\
 
 - $E_{i}$ : Offset
 - $\rho_{i}$ : `"Rate"` or `"Relative Risk"`
-- $\exp(\beta_{0})$ : 평균 사건 수 
-- $\exp(\beta_{j})$ : $x_{ji}$이 1 증가할 때 `"Rate"` or `"Relative Risk"`의 변화
-
+- $\exp(\beta_{0})$ 
+  - 수치형 : 예측변수들이 0일 때 평균 사건 수 
+  - 범주형 :  Reference Category일 때 평균 사건 수
+- $\exp(\beta_{j})$ : 
+  - 수치형 : $x_{ji}$이 1 증가할 때 `"Rate"` or `"Relative Risk"`의 변화
+  - 범주형 :  Reference Category와 비교할 때 `"Rate"` or `"Relative Risk"`의 변화
+  
+  
 ### **Real Data**
 
 #### **Loading Data**
