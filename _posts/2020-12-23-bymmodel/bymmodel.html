@@ -2519,7 +2519,7 @@ v_{i} \thicksim N(0, \sigma^2_{v})
 <hr />
 <ul>
 <li><p>BYM Model에서의 모수 (Parameter)는 <span class="math inline">\(log{\tau_{u}}\)</span>, <span class="math inline">\(log{\tau_{v}}\)</span> , where <span class="math inline">\(\tau_{u} = 1/{\sigma^2_{u}}\)</span>, <span class="math inline">\(\tau_{v} = 1/{\sigma^2_{v}}\)</span></p></li>
-<li><p><span class="math inline">\(u_{i}\)</span>와 <span class="math inline">\(v_{i}\)</span>는 독립적으로 해석할 수 없으며, 오직 <span class="math inline">\(\xi=u_{i}+v_{i}\)</span>로 공간 효과를 식별할 수 있음</p></li>
+<li><p><span class="math inline">\(u_{i}\)</span>와 <span class="math inline">\(v_{i}\)</span>는 독립적으로 해석할 수 없으며, 오직 <span class="math inline">\(\xi_{i}=u_{i}+v_{i}\)</span>로 공간 효과를 식별할 수 있음</p></li>
 </ul>
 <h1 id="real-data"><strong>Real Data</strong></h1>
 <p>2019년 서울에서 발생한 강간강제추행범죄를 분석하기 위해 <a href="https://www.r-inla.org/">R-INLA (Integrated Nested Laplace Approximations)</a>를 이용하여 BYM Model을 적용해보았다. 데이터는 <a href="https://data.seoul.go.kr/">서울 열린데이터광장</a>에서 수집하였다.</p>
@@ -2657,7 +2657,7 @@ Call:
    = TRUE, cpo = TRUE), &quot;, &quot; control.predictor = list(compute = 
    TRUE))&quot;) 
 Time used:
-    Pre = 0.699, Running = 0.849, Post = 0.0927, Total = 1.64 
+    Pre = 0.659, Running = 1.16, Post = 0.107, Total = 1.92 
 Fixed effects:
               mean    sd 0.025quant 0.5quant 0.975quant   mode kld
 (Intercept) -0.066 0.105     -0.274   -0.066      0.142 -0.066   0
@@ -2865,7 +2865,7 @@ Call:
    = TRUE, cpo = TRUE), &quot;, &quot; control.predictor = list(compute = 
    TRUE))&quot;) 
 Time used:
-    Pre = 0.541, Running = 0.787, Post = 0.0728, Total = 1.4 
+    Pre = 0.579, Running = 0.853, Post = 0.0928, Total = 1.52 
 Fixed effects:
               mean    sd 0.025quant 0.5quant 0.975quant   mode kld
 (Intercept) -0.066 0.096     -0.258   -0.066      0.125 -0.066   0

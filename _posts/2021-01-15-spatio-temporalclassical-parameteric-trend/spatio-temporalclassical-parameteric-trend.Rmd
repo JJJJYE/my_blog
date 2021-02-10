@@ -90,7 +90,7 @@ v_{i} \thicksim N(0, \sigma^2_{v})
 
 - 모수 (Parameter)는 $\log{\tau_{u}}$, $\log{\tau_{v}}$, $\log{\tau_{\delta}}$ , where $\tau_{u} = 1/{\sigma^2_{u}}$, $\tau_{v} = 1/{\sigma^2_{v}}$, $\tau_{\delta} = 1/{\sigma^2_{\delta}}$
 
-- $u_{i}$와 $v_{i}$는 독립적으로 해석할 수 없으며, 오직 $\xi=u_{i}+v_{i}$로 공간 효과를 식별할 수 있음
+- $u_{i}$와 $v_{i}$는 독립적으로 해석할 수 없으며, 오직 $\xi_{i}=u_{i}+v_{i}$로 공간 효과를 식별할 수 있음
 
 # **Real Data**
 
