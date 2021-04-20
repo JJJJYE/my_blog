@@ -268,6 +268,7 @@ detach(package:lift)
 ## **4-1. 모형 적합**
 
 Turn Parameter인 `trials`의 그리드를 조정하기 위해서 그리드를 조정해주지 않았을 때 결과를 참고하였다. 아래는 그리드를 조정해주지 않았을 때 기본적인 결과이다.  
+
 ```{r}
 fitControl <- trainControl(method="cv", number=5)                            # 5-fold-cross validation
 
