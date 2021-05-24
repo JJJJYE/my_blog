@@ -41,6 +41,10 @@ pacman::p_load("KoNLP",
                "tm", 
                "stringr")
 
+# useSystemDic() # 시스템 사전 설정
+# useSejongDic() # 세종 사전 설정
+useNIADic() # NIADic 사전 설정 (추천)
+
 mytext <- c("이 문장은 K-pop 가사에   자주 등장합니다!!",
             "이 문장은 \t 2021년에 씌여졌습니다:)",
             "모든 문장들이 흥미롭다.")
@@ -150,5 +154,4 @@ corpus1 <- tm_map(corpus, removeWords,  words=c("이", "다"))
 dtm <- DocumentTermMatrix(corpus1)           # 문서x단어 행렬
 inspect(dtm)
 ```
-
 

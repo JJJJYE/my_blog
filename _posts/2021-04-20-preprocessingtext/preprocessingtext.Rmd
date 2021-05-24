@@ -15,6 +15,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
 - 출처 : [R를 이용한 텍스트 마이닝](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9788946072190)
 
 > 텍스트 마이닝 (Text Mining)은 비정형 데이터인 텍스트를 분석하여 유용한 정보를 추출 및 가공하는 것을 말한다. 이 때, 비정형 데이터는 의미를 쉽게 파악하는 데 힘들기 때문에 정형화시키는 과정이 필요하며, 이를 텍스트 전처리 또는 정제화 작업이라고 부른다.
@@ -62,6 +63,7 @@ mytext <- c("I love you", "I am student")
 tokenize_words(mytext, lowercase = FALSE)   # lowercase : 소문자 변환  
 tokenize_sentences(mytext)
 ```
+
 
 
 ## **한국어ver.1**
@@ -154,7 +156,7 @@ mytext2
 ```
 
 
-## Ver.2**
+## **Ver.2**
 
 ```{r}
 corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
@@ -329,7 +331,7 @@ inspect(tdm)
 
 ## **TF-IDF**
 
-> 단순히 한 문서 내 단어의 빈도수가 아니라 `해당 단어가 나타나는 문서들의 갯수도 고려`하여 특정 단어가 특정 문서내에서 얼마나 중요한지를 나타내는 통계적 수치를 단어 빈도-역 문서 빈도 (Term Frequency — Inverse Document Frequency, TF-IDF)라고 한다.
+> 단순히 한 문서 내 단어의 빈도수가 아니라 그 단어가 나타나는 문서들의 갯수도 고려하여 특정 단어가 특정 문서내에서 얼마나 중요한지를 나타내는 통계적 수치를 단어 빈도-역 문서 빈도 (Term Frequency — Inverse Document Frequency, TF-IDF)라고 한다.
 
 ```{r}
 # TF-IDF
