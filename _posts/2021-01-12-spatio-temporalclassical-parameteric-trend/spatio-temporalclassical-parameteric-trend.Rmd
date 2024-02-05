@@ -1,0 +1,368 @@
+---
+title: "Spatio-Temporal Model(Classical Parametric Trend)"
+description: |
+ Summary Classical Parametric Trend of Spatio-Temporal Model
+author:
+  - name: Yeongeun Jeon
+date: 01-12-2021
+preview: preview.PNG
+categories: Spatial Statistics
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+>INLA는 잠재 가우스 모형 (latent gaussian model)에 특화된 방법이며 복잡한 사후 분포를 단순화된 라플라스 근사치를 이용하고 적분을 유한개의 가중 합으로 계산하기 때문에 MCMC에 비해 비교적 짧은 계산시간에 정확한 결과를 제공한다는 이점이 있다. 이러한 장점을 이용하여 2017년 ~ 2019년에  서울에서 발생한 5대강력범죄를 분석하기 위해 [R-INLA (Integrated Nested Laplace Approximations)](https://www.r-inla.org/)를 적용해보았다. 데이터는 [서울 열린데이터광장](https://data.seoul.go.kr/)에서 수집하였다. 게다가 범죄발생은 공간과 밀접한 관련이 있다는 것은 잘 알려진 것이며, 공간의 가변적 특성을 고려한다면 `시공간 모형(Spatio-Temporal Model)`을 적용하여 분석하는 것이 적절하다. 공간 모형으로는 `BYM Model`, 시간 모형으로는 `"Classical Parameteric Trend"`을 이용하였다.
+
+--------
+
+# **Classical Parametric Trend**
+
+서울 강간강제추행범죄는 count data이기 때문에 Poisson regression이 사용된다.
+$i$번째 자치구의 $t$시간에서 발생한 5대 강력범죄 건수를 $y_{it}$라고 할 때,
+\begin{align*}
+y_{it} &\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}\\
+\eta_{it} &= \log{\rho_{it}} = b_{0} + u_{i} + v_{i} + (\beta+\delta_{i})*t
+\end{align*}
+
+- $E_{it}$ : $t$시간에 $i$번째 자치구의 예상된 수
+- $\rho_{it}$ :$t$시간에 $i$번째 자치구의 상대적 위험 (Relative risk)
+- $b_{0}$ : 모든 자치구에서의 평균 $y$
+- $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
+- $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
+- $\beta$ : 전반적인 시간 효과
+- $\delta_{i}$ : 시간과 공간 사이의 상호작용으로 전반적인 추세 $\beta$와 지역별 추세(area-specific trend) 사이의 차이
+   - $\delta_{i}>0$ : $i$번재 자치구의 trend는 주요 추세(Main Trend)보다 가파르다.
+   - $\delta_{i}<0$ : $i$번재 자치구의 trend는 주요 추세(Main Trend)보다 덜 가파르다.
+
+&#10148; **Classical Parametric Trend는 선형추세만을 가정한다**
+
+
+-------
+
+## **Spatial Effect**
+
+BYM Model은 공간적으로 구조화된 요소($u_{i}$)와 비구조화된 요소($v_{i}$) 두 가지를 모두 고려한다. 
+
+-------
+
+### **구조화된 공간 효과($u_{i}$)**
+\begin{align*}
+&u_{i} \vert u_{-i} \thicksim N(m_{i}, s^2_{i}),\\
+&m_{i} = \frac{\sum_{j \in \mathcal{N}_{i}} u_{j}}{{\# \mathcal{N}_{i}}} ,\;\;  
+s^2_{i} = \frac{\sigma^2_{u}}{\# \mathcal{N}_{i}},
+\end{align*}
+
+- $\mathcal{N}_{i}$ : $i$ 번째 지역과 근접한 이웃 지역 집합
+- $\# \mathcal{N}_{i}$ : $i$ 번째 지역과 근접한 이웃 지역 갯수
+   - 근접한 이웃은 경계선이 맞닿아 있는 지역을 의미
+   
+- $m_{i}$ : $i$ 번째 지역과 근접한 이웃 지역들의 $u_{j}$ 평균
+
+- $s^2_{i}$ : 근접한 이웃 수에 의존
+  - 이웃 수가 많으면 분산은 작아짐
+    - **강한 공간 상관관계**가 존재하는 경우, 이웃을 많이 가지는 지역일수록 더 많은 정보를 가진다는 것 
+- 공간 상관관계는 **iCAR**을 사용
+
+
+### **비구조화된 공간 효과($v_{i}$)**
+\begin{align*}
+v_{i} \thicksim N(0, \sigma^2_{v})
+\end{align*}
+
+- 순수한 과산포 (Overdispersion)에 대한 고려
+
+------
+
+## **Differential Trend**
+\begin{align*}
+\delta_{i} \thicksim N(0, \sigma^2_{\delta})
+\end{align*}
+
+- 시간과 공간사이의 상호작용
+
+------
+
+- 모수 (Parameter)는 $\log{\tau_{u}}$, $\log{\tau_{v}}$, $\log{\tau_{\delta}}$, where $\tau_{u} = 1/{\sigma^2_{u}}$, $\tau_{v} = 1/{\sigma^2_{v}}$, $\tau_{\delta} = 1/{\sigma^2_{\delta}}$
+
+- $u_{i}$와 $v_{i}$는 독립적으로 해석할 수 없으며, 오직 $\xi_{i}=u_{i}+v_{i}$로 공간 효과를 식별할 수 있음
+
+# **Real Data**
+
+2017년 ~ 2019년에  서울에서 발생한 5대강력범죄를 분석하기 위해 [R-INLA (Integrated Nested Laplace Approximations)](https://www.r-inla.org/)를 이용하여 시공간모형을 적용해보았다. 데이터는 [서울 열린데이터광장](https://data.seoul.go.kr/)에서 수집하였다.
+
+## **Loading Data**
+
+```{r}
+pacman::p_load("maptools",     # For readShapePoly
+               "spdep",        # For poly2nb
+               "dplyr", 
+               "RColorBrewer", # For brewer.pal
+               "INLA")
+
+
+
+dat.2017   <- read.csv("2017_crime.csv",header=T) 
+dat.2018   <- read.csv("2018_crime.csv",header=T) 
+dat.2019   <- read.csv("2019_crime.csv",header=T) 
+
+# Convert rows in the order of ESPI_PK
+dat.2017 <- dat.2017[order(dat.2017$ESRI_PK),]
+dat.2018 <- dat.2018[order(dat.2018$ESRI_PK),]
+dat.2019 <- dat.2019[order(dat.2019$ESRI_PK),]
+
+
+# Change for year
+dat.2017 <- dat.2017 %>%
+  mutate(year = 1)
+
+dat.2018 <- dat.2018 %>%
+  mutate(year = 2)
+
+dat.2019 <- dat.2019 %>%
+  mutate(year = 3)
+
+# Combining for data
+dat        <- rbind(dat.2017, dat.2018, dat.2019)
+```
+
+
+----------
+
+## **Loading .shp**
+
+```{r}
+seoul.map   <- maptools::readShapePoly("./TL_SCCO_SIG_W_SHP/TL_SCCO_SIG_W.shp")   # Call .shp file
+seoul.nb    <- poly2nb(seoul.map)      # Builds a neighbours list based on regions with contiguous boundaries
+seoul.listw <- nb2listw(seoul.nb)      # Supplements a neighbours list with spatial weights for the chosen coding scheme
+seoul.mat   <- nb2mat(seoul.nb)        # Generates a weights matrix for a neighbours list with spatial weights for the chosen coding scheme
+                                       # Object of class "nb"
+```
+
+-------------
+
+## **Expected Case**
+
+흔하게 사용하는 예상되는 수 ($E_{it}$)는 
+\begin{align*}
+E_{it} = n_{it}\frac{\sum_{t}\sum_{i} y_{it}}{\sum_{t}\sum_{i} n_{it}},
+\end{align*}
+
+- $n_{it}$는 $t$시점에서 $i$ 번째 지역의 인구수
+
+(참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.293)
+
+```{r}
+dat$E <- sum(dat$crime)/sum(dat$pop_total)*dat$pop_total
+```
+
+-------
+
+## **Adjacency Matrix**
+
+INLA에서는 근접행렬을 이용하여 그래프로 나타낼 수 있다.
+
+```{r}
+nb2INLA("Seoul.graph", seoul.nb)   # nb2INLA(저장할 파일 위치, Object of class "nb")
+seoul.adj <- paste(getwd(),"/Seoul.graph",sep="")
+```
+
+```{r}
+H         <- inla.read.graph(filename="Seoul.graph")
+image(inla.graph2matrix(H),xlab="",ylab="")
+```
+
+
+-----------
+
+## **Modeling**
+
+### **Only Effects**
+
+```{r}
+dat$ID.area  <- 1:25         # The Identifiers For The Boroughs 
+dat$ID.area1 <- dat$ID.area  # Duplicate of ID.area 
+```
+
+
+```{r}
+formula <- crime ~ 1 + f(ID.area, model="bym", graph = seoul.adj) +
+                       f(ID.area1, year, model="iid") +       # delta_i
+                       year                                   # main trend
+
+model.cl     <- inla(formula,family = "poisson", data = dat, E = E, # E = E or offset = log(E)
+                     control.predictor=list(compute=TRUE),               # Compute the marginals of the model parameters
+                     control.compute = list(dic = TRUE))                 # Compute some model choice criteria
+
+summary(model.cl)
+```
+
+
+#### **Mapping**
+
+---------
+
+##### **Spatial Effect**
+
+Spatio-Temporal Model에서 `전체 연구기간에 걸친 전반적인 공간 패턴`을 보여주기 위하여 공간 효과에 대한 Map을 그려보았다.
+이 때, 공간 패턴은 시간에 영향을 받지 않기 때문에 모든 시간에 대해 일정하며, 가까운 지역들끼리 비슷한 색깔을 가진다면 공간 의존성이 있다고 판단한다.
+
+```{r}
+# Random Effect for spatial structure (ui+vi)
+csi  <- model.cl$marginals.random$ID.area[1:25]        # Extract the marginal posterior distribution for each element of the random effects
+zeta <- lapply(csi,function(x) inla.emarginal(exp,x))  # The exponential transformation and calculate the posterior mean for each of them
+
+# Define the cutoff for zeta
+zeta.cutoff <- c(0.5, 0.9, 1.3, 1.9, 2.3, 2.7, 3.0)
+
+# Transform in categorical variable
+cat.zeta <- cut(unlist(zeta),breaks=zeta.cutoff,
+                include.lowest=TRUE)
+```
+
+&#10148; BYM Model은 $\xi_{i}=u_{i}+v_{i}$ 와 $u_{i}$를 모수화기 때문에 `marginals.random$ID.area`의 총 2K개가 존재한다.
+
+&#10148; 우리가 관심있는 것은 $\xi_{i}=u_{i}+v_{i}$이므로  `marginals.random$ID.area[1:25]`를 추출한다.
+
+--------
+
+##### **Exceedance probabilities**
+
+단순히 공간효과만 비교하는 것보다 초과 확률(Exceedance probabilities)을 비교하는 것도 용이하다. 왜냐하면 초과 확률은 불확실성(Uncertainty)을 고려하기 때문이다. 또한, 단순히 점추정이 1이 넘는 지역이라도 불확실성을 고려한 posterior probability를 보면 cutoff value를 넘지 못할 수 있으며, 그 지역이 위험한 지역이라 선언하기 충분한 신뢰성이 없을 수 있다.
+
+```{r}
+a        <- 0
+prob.csi <- lapply(csi, function(x) {1 - inla.pmarginal(a, x)})   # inla.pmarginal : P(x<a)
+
+# Define the cutoff for zeta
+prob.cutoff <-  c(0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+
+cat.prob <- cut(unlist(prob.csi),breaks=prob.cutoff,
+                include.lowest=TRUE)
+
+```
+
+&#10148; $P(\exp(\xi_{i}>1)\vert Y) = P(\xi_{i}>0\vert Y)$. 
+
+-----------
+
+```{r}
+maps.cat.zeta <- data.frame(ESRI_PK=dat.2019$ESRI_PK, cat.zeta=cat.zeta, cat.prob=cat.prob)
+
+#Add the categorized zeta to the spatial polygon
+data.boroughs           <- attr(seoul.map, "data")
+attr(seoul.map, "data") <- merge(data.boroughs, maps.cat.zeta,
+                                 by="ESRI_PK")
+# For adding name of Seoul
+lbls <- as.character(seoul.map$SIG_ENG_NM)             # 자치구명
+spl  <- list('sp.text', coordinates(seoul.map), lbls, cex=.7)
+
+# Map zeta
+spplot(obj=seoul.map, zcol= "cat.zeta", sp.layout = spl,
+       col.regions=brewer.pal(6,"Blues"), asp=1) 
+
+```
+
+&#10148; $\exp(\xi_{i})$가 1 보다 크면 `전체 연구기간에 걸쳐서` $i$번째 지역의 `평균 위험(risk)는  전체 지역보다 높은 위험`을 가진다.
+
+   - 중구가 가장 높은 평균 위험을 가진다.
+   - 종로구가 두번재로 높은 평균 위험을 가지며, 종로구와 중구의 가까운 이웃들은 비슷한 진한 색깔을 가지고 있다.
+
+```{r}
+# Map prob
+spplot(obj=seoul.map, zcol= "cat.prob",sp.layout = spl,
+       col.regions=brewer.pal(5,"Blues"), asp=1) 
+```
+
+
+----------
+
+##### **Estimated Relative Risk**
+
+공간효과와 시간효과를 고려하여 추정된 `상대적 위험(Relative Risk)`는 `summary.fitted.values`을 이용하여 확인할 수 있다.
+
+```{r}
+# Estimated Relative risk
+est.rr      <- model.cl$summary.fitted.values$mean          
+
+rr.cutoff   <- c(0.5, 0.9, 1.3, 1.9, 2.3, 2.7, 3.0)
+
+cat.rr      <- cut(unlist(est.rr),breaks = rr.cutoff,
+                   include.lowest = TRUE)
+
+# Posterior probability p(Relative risk > a1|y)
+mar.rr  <- model.cl$marginals.fitted.values
+a1      <- 1
+prob.rr <- lapply(mar.rr, function(x) {1 - inla.pmarginal(a1, x)})
+
+cat.rr.prob <- cut(unlist(prob.rr),breaks = prob.cutoff,
+                   include.lowest = TRUE)
+
+
+maps.cat.rr <- data.frame(ESRI_PK=dat.2019$ESRI_PK, 
+                          rr.2017=cat.rr[1:25], rr.2018=cat.rr[26:50], rr.2019=cat.rr[51:75],
+                          rr.prob.2017=cat.rr.prob[1:25], rr.prob.2018=cat.rr.prob[26:50], rr.prob.2019=cat.rr.prob[51:75])
+
+#Add the categorized zeta to the spatial polygon
+data.boroughs           <- attr(seoul.map, "data")
+attr(seoul.map, "data") <- merge(data.boroughs, maps.cat.rr,
+                                 by="ESRI_PK")
+
+
+# Map 
+spplot(obj=seoul.map, zcol= c("rr.2017", "rr.2018", "rr.2019"),
+       names.attr = c("2017", "2018", "2019"),       # Changes Names
+       sp.layout = spl,
+       col.regions=brewer.pal(6,"Blues"), as.table=TRUE)
+
+```
+
+
+&#10148; $\rho_{it}$가 1 보다 크면, 공간효과와 시간효과를 고려했을 때, $t$년도의 $i$번째 지역은 전체 지역의 평균(전체 연구기간에 걸쳐서)보다 높은 위험 (risk) 을 가진다.
+
+   - 연구기간에 상관없이 중구가 가장 높은 위험을 가진다.
+   - 시간이 흐름에 따라 중구 주변 이웃들의 색깔이 옅어지고 있다.
+      - 즉, 위험이 낮아지고 있다.
+
+
+```{r}
+# Map prob
+spplot(obj=seoul.map, zcol= c("rr.prob.2017", "rr.prob.2018", "rr.prob.2019"),
+       names.attr = c("2017", "2018", "2019"),       # Changes Names,sp.layout = spl,
+       sp.layout = spl,
+       col.regions=brewer.pal(5,"Blues"), as.table=TRUE) 
+```
+
+
+&#10148; `0.8 이상`인 지역을 위험이 높은 `hot-spot` 지역, `0.2 이하`인 지역을 위험이 낮은 `cool-spot` 지역이라 한다.
+
+------
+
+### **Change prior**
+
+BYM Model의 모수 $\log{\tau_{u}}$와 $\log{\tau_{v}}$ 에 대한 `기본값은 logGamma(1,0.0005)`이며, $\log{\tau_{\delta}}$의 `기본값은 logGamma(1,0.00005)`이다.
+모수에 대한 prior을 변경하는 방법은 다음과 같다.
+
+```{r}
+formula1 <- crime ~ 1 + f(ID.area, model="bym", graph = seoul.adj,
+                          hyper = list(prec.unstruct =      # Prior for the log of the unstructured effect 
+                                        list(prior="loggamma",param=c(1,0.01)),
+                                       prec.spatial =       # Prior for the log of the structured effect 
+                                        list(prior ="loggamma",param=c(1,0.01)))) +
+                        f(ID.area1, year, model="iid",      # delta_i
+                          hyper = list(prec = list(prior="loggamma",param=c(1,0.01)))) +       
+                        year                                # main trend
+
+model.cl1     <- inla(formula,family = "poisson", data = dat, E = E,# E = E or offset = log(E)
+                      control.predictor=list(compute=TRUE),               # Compute the marginals of the model parameters
+                      control.compute = list(dic = TRUE))                 # Compute some model choice criteria
+
+summary(model.cl1)
+```
+
+

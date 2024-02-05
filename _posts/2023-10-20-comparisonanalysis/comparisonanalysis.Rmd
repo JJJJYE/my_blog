@@ -1,0 +1,907 @@
+---
+title: "Comparison Analysis"
+description: |
+  Description for Comparison Analysis
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-10-20
+categories: Text Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+- **참고 : Do it! 쉽게 배우는 R 텍스트 마이닝***
+
+----------
+
+# **패키지 설치**
+
+```{r}
+pacman::p_load("readr",
+               "dplyr", "tidyr",
+               "stringr",
+               "tidytext",
+               "KoNLP",
+               "ggplot2")
+```
+
+-----------
+
+# **1. 단어 빈도 비교**
+
+- 단어 빈도 분석을 응용해 문재인 전 대통령과 박근혜 전 대통령의 연설문의 차이를 살펴본다.
+
+----------
+
+```{r, eval=F}
+# 데이터 불러오기
+
+# 1. 문재인 전 대통령 연설문 불러오기
+raw_moon <- readLines(".../speech_moon.txt",
+                      encoding = "UTF-8")
+moon <- raw_moon %>%
+  as_tibble() %>%                            # Tibble 형태로 변환
+  mutate(president = "moon")                 # 변수 president 추가
+
+moon
+```
+
+```{r, echo=F}
+# 1. 문재인 전 대통령 연설문 불러오기
+raw_moon <- readLines("C:/Users/User/Desktop/쉽게 배우는 R 텍스트 마이닝/Data/speech_moon.txt",
+                      encoding = "UTF-8")
+moon <- raw_moon %>%
+  as_tibble() %>%                            # Tibble 형태로 변환
+  mutate(president = "moon")                 # 변수 president 추가
+
+moon
+```
+
+```{r, eval=F} 
+# 2. 박근혜 전 대통령 연설문 불러오기
+raw_park <- readLines(".../speech_park.txt", 
+                      encoding = "UTF-8")
+
+park <- raw_park %>%
+  as_tibble() %>%                            # Tibble 형태로 변환
+  mutate(president = "park")                 # 변수 president 추가
+
+park
+```
+
+```{r, echo=F}
+# 2. 박근혜 전 대통령 연설문 불러오기
+raw_park <- readLines("C:/Users/User/Desktop/쉽게 배우는 R 텍스트 마이닝/Data/speech_park.txt", 
+                      encoding = "UTF-8")
+
+park <- raw_park %>%
+  as_tibble() %>%                            # Tibble 형태로 변환
+  mutate(president = "park")                 # 변수 president 추가
+
+park
+```
+
+```{r}
+# 두 전 대통령의 연설문을 하나의 데이터셋으로 결합하기
+bind_speeches <- bind_rows(moon, park) %>%   # 두 전 대통령의 연설문을 행으로 결합
+  select(president, value)                   # 변수 president와 value 선택
+
+head(bind_speeches)                          # 데이터셋의 앞부분 출력
+tail(bind_speeches)                          # 데이터셋의 뒷부분 출력
+```
+
+```{r}
+# 전처리
+speeches <- bind_speeches %>%
+  mutate(value = str_replace_all(value,      
+                                 "[^가-힣]", # [^가-힣] : 한글을 제외한 모든 문자를 의미하는 정규 표현식
+                                 " "),       # 공백으로 변경
+         value = str_squish(value))          # 연속된 공백 제거
+
+speeches
+```
+
+```{r}
+# 토큰화
+speeches <- speeches %>%
+  unnest_tokens(input = value,               # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,               # 출력 변수명
+                token = extractNoun)         # 명사 기준으로 토큰화
+
+speeches
+```
+
+
+
+----------
+
+## **1-1. 단어 빈도 계산**
+
+- Package `"dplyr"`의 함수 `count`를 이용하여 두 전 대통령의 연설문에서 사용한 단어의 빈도를 계산한다.
+- 한 글자로 된 단어는 어떤 의미로 사용하였는지 파악하기 어렵기 때문에 분석 대상에서 제외한다.
+
+```{r}
+frequency <- speeches %>%                    # 전처리 & 토큰화를 수행한 결과가 저장되어 있는 객체 "speeches"
+  count(president, word) %>%                 # 연설문 각각의 단어 빈도 계산
+  filter(str_count(word) > 1)                # 두 글자 이상의 단어만 추출 -> 한 글자로 된 단어 제거
+
+frequency                            
+```
+
+----------
+
+## **1-2. 자주 사용한 단어 추출**
+
+- Package `"dplyr"`의 함수 `slice_max`를 이용하여 연설문에서 가장 많이 사용한 단어를 추출한다.
+    - 함수 `slice_max` : 값이 큰 상위 n개의 행을 추출해 내림차순으로 정렬하는 함수
+    - 함수 `slice_min` : 값이 작은 하위 n개의 행을 추출하여 정렬하는 함수
+- 두 전 대통령 각각의 연설문에서 빈도가 가장 높은 단어를 추출하기 위해 함수 `group_by`를 이용하여 변수 `president`에 대해 그룹화를 수행한다.
+
+```{r}
+top10 <- frequency %>%                       # 단어 빈도가 저장되어 있는 객체 in 1-1
+  group_by(president) %>%                    # 변수 president에 대해 그룹화 -> 각각의 연설문에서 빈도가 높은 단어를 추출하기 위해 수행
+  slice_max(n,                               # 단어의 빈도가 입력된 변수명
+            n = 10)                          # 빈도가 가장 높은 10개의 단어 추출 
+
+top10
+```
+
+```{r}
+# 문재인 전 대통령 연설문에 대한 결과만 출력
+top10 %>%
+  filter(president == "moon")                
+```
+
+```{r}
+# 박근혜 전 대통령 연설문에 대한 결과만 출력
+top10 %>%
+  filter(president == "park")               
+```
+
+`Result!` 박근혜 전 대통령 연설문에서 빈도가 높은 단어 12개가 출력되었다. 10개가 아닌 12개인 이유는 "교육", "사람", "사회", "일자리"가 똑같이 9번씩 사용되어 빈도가 동일한 단어를 모두 추출하였기 때문이다. 빈도가 동일하더라도 원하는 개수만큼만 단어를 추출하기 위해서는 옵션 `with_ties = F`를 지정하면 된다. 
+
+```{r}
+# 빈도가 동일하더라도 원하는 개수만큼 단어 추출
+top10 <- frequency %>%                       # 단어 빈도가 저장되어 있는 객체 in 1-1
+  group_by(president) %>%                    # 변수 president에 대해 그룹화 -> 각각의 연설문에서 빈도가 높은 단어를 추출하기 위해 수행
+  slice_max(n,                               # 단어의 빈도가 입력된 변수명
+            n = 10,                          # 빈도가 가장 높은 10개의 단어 추출 
+            with_ties = F)                   # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+```
+
+```{r}
+# 문재인 전 대통령 연설문에 대한 결과만 출력
+top10 %>%
+  filter(president == "moon")                
+```
+
+```{r}
+# 박근혜 전 대통령 연설문에 대한 결과만 출력
+top10 %>%
+  filter(president == "park")               
+```
+
+`Result!` 옵션 `with_ties = F`를 지정하여 박근혜 전 대통령 연설문에서 빈도가 높은 단어 10개가 출력되었다. 똑같이 9번씩 사용한 단어 "교육", "사람", "사회", "일자리" 중 "교육"과 "사람"이 포함된 이유는 빈도가 동일한 단어의 경우 원본 데이터의 정렬 순서에 따라 출력하기 때문이다. 
+
+
+-------------
+
+
+## **1-3. 시각화**
+
+- 두 전 대통령이 자주 사용한 단어를 비교할 수 있도록 연설문별로 막대 그래프를 작성한다.
+
+```{r}
+# 기본 막대 그래프
+ggplot(top10,                               # 자주 사용한 상위 10개 단어가 저장되어 있는 객체 in 1-2
+       aes(x = reorder(word, n),            # reorder : top10에서 단어에 따른 평균 사용 빈도를 이용하여 내림차순 정렬
+           y = n,                           
+           fill = president)) +             # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                              # 막대 그래프
+  coord_flip() +                            # 막대를 가로로 회전 
+  facet_wrap(~president)                    # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+```
+
+`Result!` 그래프를 보면 막대가 없는 단어가 존재한다. 이는 축을 구성하는 단어가 한 대통령의 연설문에만 포함되어 있기 때문이다. 예를 들어, "행복"은 박근혜 전 대통령의 연설문에는 존재하지만 문재인 전 대통령의 연설문에는 존재하지 않는다. 이러한 문제를 방지하기 위해 함수 `facet_wrap`의 옵션 `scales = "free_y"`을 지정한다.
+
+```{r}
+# y축이 다른 막대 그래프
+ggplot(top10,                               # 자주 사용한 상위 10개 단어가 저장되어 있는 객체 in 1-2
+       aes(x = reorder(word, n),            # reorder : top10에서 단어에 따른 평균 사용 빈도를 이용하여 내림차순 정렬
+           y = n,                           
+           fill = president)) +             # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                              # 막대 그래프
+  coord_flip() +                            # 막대를 가로로 회전 
+  facet_wrap(~president,                    # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+             scales = "free_y")             # y축 통일 X
+```
+
+`Result!` 박근혜 전 대통령의 막대 그래프를 보면, "국민"의 빈도가 너무 높아 다른 단어의 빈도 차이가 잘 드러나지 않는다.
+
+```{r}
+# 전반적인 단어의 빈도가 잘 드러나도록 "국민" 제외
+top10 <- frequency %>%                      # 단어 빈도가 저장되어 있는 객체 in 1-1
+  filter(word != "국민") %>%                # "국민" 제외
+  group_by(president) %>%                   # 변수 president에 대해 그룹화 -> 각각의 연설문에서 빈도가 높은 단어를 추출하기 위해 수행
+  slice_max(n,                              # 단어의 빈도가 입력된 변수명
+            n = 10,                         # 빈도가 가장 높은 10개의 단어 추출 
+            with_ties = F)                  # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+
+ggplot(top10,                               # "국민" 제외하고 자주 사용한 상위 10개 단어가 저장되어 있는 객체
+       aes(x = reorder(word, n),            # reorder : top10에서 단어에 따른 평균 사용 빈도를 이용하여 내림차순 정렬
+           y = n,                           
+           fill = president)) +             # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                              # 막대 그래프
+  coord_flip() +                            # 막대를 가로로 회전 
+  facet_wrap(~president,                    # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+             scales = "free_y")             # y축 통일 X
+```
+
+`Result!` 그래프를 보면 x축을 지정할 때 함수 `reorder`를 사용하여도 막대가 빈도 기준으로 완벽하게 정렬되지 않았다. 이는 그래프를 작성할 때 객체 "top10"에서 단어에  따른 평균 사용 빈도를 기준으로 x축 순서를 정했기 때문이다. 이러한 문제를 방지하기 위해 Package `"tidytext"`의 함수 `reorder_within(x, by, within)`를 사용한다. 
+
+- `x` : x축에 나타낼 변수명
+- `by` : 정렬 기준으로 단어의 빈도가 입력된 변수명
+- `within` : 그래프를 나누는 기준
+
+```{r}
+# 항목별로 단어 빈도를 정렬한 막대 그래프
+ggplot(top10,                                       # "국민" 제외하고 자주 사용한 상위 10개 단어가 저장되어 있는 객체
+       aes(x = reorder_within(word, n, president),  # reorder_within : 항목별로 단어 빈도순 정렬
+           y = n,                           
+           fill = president)) +                     # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                                      # 막대 그래프
+  coord_flip() +                                    # 막대를 가로로 회전 
+  facet_wrap(~president,                            # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+             scales = "free_y")                     # y축 통일 X
+```
+
+
+```{r}
+# 단어 뒤에 항목 이름을 제거한 막대 그래프 
+ggplot(top10,                                       # "국민" 제외하고 자주 사용한 상위 10개 단어가 저장되어 있는 객체
+       aes(x = reorder_within(word, n, president),  # reorder_within : 항목별로 단어 빈도순 정렬
+           y = n,                           
+           fill = president)) +                     # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                                      # 막대 그래프
+  coord_flip() +                                    # 막대를 가로로 회전 
+  facet_wrap(~president,                            # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+             scales = "free_y") +                   # y축 통일 X
+  scale_x_reordered()                               # 단어 뒤의 대통령 이름 제거
+```
+
+----------
+
+# **2. 오즈비**
+
+- 오즈비(Odds Ratio) : 어떤 사건이 A 조건에서 발생할 확률이 B 조건에서 발생할 확률에 비해 얼마나 더 큰지를 나타낸 값
+    - 오즈비를 구하면 단어가 두 연설문 중 어떤 연설문에 등장할 확률이 높은지, 상대적인 중요도를 알 수 있다.
+- 단순히 빈도가 높은 단어는 `보편적으로 자주 사용`하고 별다른 특징이 없기 때문에 텍스트의 차이를 잘 드러내지 못한다.
+    - 예를 들어, 두 전 대통령의 연설문 모두 "우리", "사회", "경제", "일자리"를 자주 사용하였는데, 이런 단어만으로 연설문의 차이를 알기 어렵다.
+- 텍스트를 비교할 때는 `특정 텍스트에서만 많이 사용`하고 `다른 텍스트에서는 적게 사용한 단어`, 즉, `'상대적으로 많이 사용한 단어'`를 살펴봐야 한다.
+
+-----------
+
+## **2-1. 데이터 형태 변환**
+
+- 앞에서 만든 객체 `"frequency"`는 변수 `president`가 "moon"인 행과 "park"인 행이 세로로 길게 나열된 형태이다.
+    - 이렇게 세로로 나열된 데이터 형태를 "Long Form"이라고 한다.
+- 상대적으로 많이 사용한 단어를 알아보려면 Long Form 데이터셋을 가로로 넓은 형태의 "Wide Form" 데이터셋으로 변형하고 단어의 비중을 나타내는 변수를 추가해야 한다.
+
+<center>
+![출처 : https://tavareshugo.github.io/r-intro-tidyverse-gapminder/09-reshaping/index.html](./image/longform.png){width=50%}
+</center>
+<br />
+
+```{r}
+# Long Form Dataset
+df_long <- frequency %>%                            # 단어 빈도가 저장되어 있는 객체 in 1-1
+  group_by(president) %>%                           # 변수 president에 대해 그룹화 -> 각각의 연설문에서 빈도가 높은 단어를 추출하기 위해 수행
+  slice_max(n,                                      # 단어의 빈도가 입력된 변수명
+            n = 10) %>%                             # 빈도가 가장 높은 10개의 단어 추출    
+  filter(word %in% c("국민", "우리",                # "국민", "우리", "정치", "행복" 단어만 추출 
+                     "정치", "행복"))
+
+df_long
+```
+
+`Result!` 예를 위해 "국민", "우리", "정치", "행복" 단어만 추출하여 Long Form 데이터셋으로 나타내었다. "국민"은 첫 번째 행을 통해 문재인 전 대통령의 연설문에서 21번 사용하였으며, 네 번째 행을 통해 박근혜 전 대통령의 연설문에서 72번 사용하였음을 알 수 있다. "우리"는 두 번째 행과 여섯 번째 행을 통해 각각의 연설문에서 몇 번 사용하였는지 알 수 있다. 이처럼 Long Form 데이터셋은 `같은 단어가 항목별로 다른 행`을 구성하기 때문에 각 항목에서 해당 단어를 몇 번씩 사용하였는지 한 번에 비교하기 어렵고, 단어 빈도를 활용해 연산하기도 불편하다.
+
+```{r}
+# Wide Form Dataset으로 변환
+df_wide <- df_long %>%                              # Long Form Dataset
+  pivot_wider(names_from = president,               # 변수명으로 입력할 값이 들어 있는 변수
+              values_from = n)                      # 변수에 채워 넣을 값이 들어 있는 변수
+
+df_wide
+```
+
+`Result!` Wide Form 데이터셋으로 변환하기 위해 Package `"tidyr"`에서 제공하는 함수 `pivot_wider`를 사용한다. Wide Form 데이터셋은 한 단어가 한 행으로 구성되어있으며, 두 연설문에서 "국민", "우리", "정치", "행복"을 몇 번씩 사용하였는지 쉽게 비교할 수 있다.
+
+-----------
+
+`Caution!` 앞에서 실행한 코드의 결과를 보면, 결측치 `NA`가 존재한다. 어떤 단어가 두 연설문 중 한 연설문에 존재하지 않으면 단어의 빈도가 계산되지 않으므로 변수 `n`의 값이 없어서 `NA`가 된다. 결측치 `NA`는 연산할 수 없으므로 `0`으로 변환해야 한다. 이러한 작업은 함수 `pivot_wider`의 옵션 `values_fill = list(n = 0)`을 지정하면 된다.
+
+```{r}
+df_wide <- df_long %>%                              # Long Form Dataset
+  pivot_wider(names_from = president,               # 변수명으로 입력할 값이 들어 있는 변수
+              values_from = n,                      # 변수에 채워 넣을 값이 들어 있는 변수
+              values_fill = list(n = 0))            # 결측치 NA를 0으로 대체
+
+df_wide
+```
+
+-----------
+
+```{r}
+# 두 연설문에서 사용한 모든 단어의 빈도를 이용하여 Wide Form 형태로 변환
+frequency_wide <- frequency %>%                     # 단어 빈도가 저장되어 있는 객체 in 1-1
+  pivot_wider(names_from = president,               # 변수명으로 입력할 값이 들어 있는 변수
+              values_from = n,                      # 변수에 채워 넣을 값이 들어 있는 변수
+              values_fill = list(n = 0))            # 결측치 NA를 0으로 대체
+
+frequency_wide
+```
+
+
+`Result!` 두 연설문에서 사용한 모든 단어에 대한 Wide Form 데이터셋을 생성하였다.
+
+-----------
+
+## **2-2. 오즈비 계산**
+
+$$
+\begin{align*}
+\text{Odds ratio} = \frac{\left( \frac{n+1}{\text{total}+1} \right)_{\text{Text A}} }{ \left( \frac{n+1}{\text{total}+1} \right)_{\text{Text B}} }
+\end{align*}
+$$
+
+- $n$ : 각 단어의 빈도
+- total : 모든 단어의 빈도 합
+
+-----------
+
+### **2-2-1. 단어의 비중을 나타내는 변수 추가**
+
+$$
+\begin{align*}
+\text{해당 단어의 비중} = \frac{\text{해당 단어의 빈도} }{ \text{모든 단어의 빈도 합} }
+\end{align*}
+$$
+
+- 연설문별로 단어의 비중을 나타내는 변수를 추가한다.
+- 어떤 단어가 한 텍스트에서 사용되지 않아 빈도가 0이면 오즈비가 0이 되므로 단어의 비중이 어떤 텍스트에서 더 큰지 알 수 없게 된다.
+    - 이러한 문제를 방지하기 위해 `빈도가 0보다 큰 값이 되도록 모든 값에 1`을 더한다.
+
+```{r}
+odds_df <- frequency_wide %>%                        # Wide Form Dataset in 2-1
+  mutate(ratio_moon = ((moon + 1)/(sum(moon + 1))),  # 문재인 전 대통령의 연설문에서 단어의 비중 계산
+         ratio_park = ((park + 1)/(sum(park + 1))))  # 박근혜 전 대통령의 연설문에서 단어의 비중 계산
+
+odds_df
+```
+
+`Result!` "가동"은 박근혜 전 대통령의 연설문에서 사용되지 않아 빈도가 0이지만 값에 1을 더하여 계산하므로써 단어의 비중이 0.000552로 계산되었다.
+
+-----------
+
+### **2-2-2. 오즈비 변수 추가**
+
+- 한 텍스트의 단어 비중을 다른 텍스트의 단어 비중으로 나누면 오즈비가 된다.
+    - 예를 들어, 앞에서 계산한 문재인 전 대통령의 연설문의 단어 비중("ratio_moon")을 박근혜 전 대통령의 연설문의 단어 비중("ratio_park")으로 나누면 각 단어의 비중이 박근혜 전 대통령의 연설문(분모)에 비해 문재인 대통령의 연설문(분자)에서 얼마나 더 큰지, 상대적인 비중을 나타낸 오즈비가 된다.
+    - 오즈비 $> 1$ : 박근혜 전 대통령의 연설문에 비해 문재인 대통령의 연설문에서 상대적인 비중이 크다.
+        - 문재인 전 대통령의 연설문에서 상대적으로 많이 사용했다는 것을 의미한다.
+    - 오즈비 $< 1$ : 박근혜 전 대통령의 연설문에서 상대적인 비중이 크다.
+        - 박근혜 전 대통령의 연설문에서 상대적으로 많이 사용했다는 것을 의미한다.
+    - 오즈비 $= 1$ : 두 연설문에서 단어의 비중이 같다.
+    
+```{r}
+odds_df <- odds_df %>%
+  mutate(odds_ratio = ratio_moon/ratio_park)         # 오즈비 계산 / 박근혜 전 대통령의 연설문에 비해 문재인 전 대통령의 연설문에서 얼마나 비중이 더 큰지를 나타냄
+```
+
+```{r}
+# 문재인 전 대통령의 연설문에서 상대적 비중이 큰 단어
+odds_df %>%
+  arrange(desc(odds_ratio))                          # 오즈비를 내림차순으로 정렬
+```
+
+`Result!` 문재인 전 대통령의 연설문에서 상대적으로 많이 사용한 단어일수록 오즈비가 크다. 결과를 보면, "복지국가"가 7.12로 오즈비가 제일 크며, 이는 박근혜 전 대통령의 연설문에 비해 문재인 전 대통령의 연설문에서 상대적으로 많이 사용했다는 것을 의미한다.
+
+```{r}
+# 박근혜 전 대통령의 연설문에서 상대적 비중이 큰 단어
+odds_df %>%
+  arrange(odds_ratio)                                # 오즈비를 오름차순으로 정렬
+```
+
+`Result!` 박근혜 전 대통령의 연설문에서 상대적으로 많이 사용한 단어일수록 오즈비가 작다. 결과를 보면, "박근혜"가 0.0879로 오즈비가 제일 작으며, 이는 문재인 전 대통령의 연설문에 비해 박근혜 전 대통령의 연설문에서 상대적으로 많이 사용했다는 것을 의미한다.
+
+```{r}
+## 오즈비 변수 한 번에 추가
+odds_df <- frequency_wide %>%                        # Wide Form Dataset in 2-1
+  mutate(ratio_moon = ((moon + 1)/(sum(moon + 1))),  # 문재인 전 대통령의 연설문에서 단어의 비중 계산
+         ratio_park = ((park + 1)/(sum(park + 1))),  # 박근혜 전 대통령의 연설문에서 단어의 비중 계산
+         odds_ratio = ratio_moon/ratio_park)         # 오즈비 계산 / 박근혜 전 대통령의 연설문에 비해 문재인 전 대통령의 연설문에서 얼마나 비중이 더 큰지를 나타냄
+
+odds_df
+```
+
+-----------
+
+## **2-3. 상대적으로 중요한 단어 추출**
+
+- 오즈비를 이용하여 두 연설문에서 상대적으로 중요한 단어를 추출한다.
+
+```{r}
+top10 <- odds_df %>%                                 # 오즈비를 계산한 결과가 저장되어 있는 객체 in 2-2-2
+  filter(rank(odds_ratio) <= 10 |                    # 오즈비가 낮은 하위 10개의 단어 추출
+           rank(-odds_ratio) <= 10)                  # 오즈비가 높은 상위 10개의 단어 추출
+
+top10 %>%
+  arrange(desc(odds_ratio)) %>%                      # 오즈비를 내림차순으로 정렬
+  print(n = Inf)                                     # 모든 행 출력
+```
+
+`Result!` 함수 `filter`는 조건에 맞는 행만 추출하는 함수이며, 함수 `rank`는 값의 순위를 구하는 함수이다. 이 두 함수를 이용하여 오즈비가 높은 상위 10개와 하위 10개의 단어를 추출할 수 있다.  
+결과를 보면, 추출한 단어 상위 10개는 문재인 전 대통령의 연설문에서 더 자주 사용하여 오즈비가 높은 단어이다. "복지국가", "여성", "공평" 같은 단어를 자주 사용함으로써 문재인 전 대통령이 박근혜 전 대통령보다 복지와 평등을 더 강조했다는 것을 알 수 있다.  
+반대로, 하위 10개는 박근혜 전 대통령의 연설문에서 더 자주 사용하여 오즈비가 낮은 단어이다. "박근혜", "여러분" 같은 단어를 보면 박근혜 전 대통령이 문재인 전 대통령보다 개인의 정체성과 국민과의 유대감을 더 강조했다는 것을 알 수 있다.  
+`Caution!` [단어 빈도 비교][**1. 단어 빈도 비교**]에서 단순히 사용 빈도가 높은 단어는 "국민", "우리", "사회" 같은 보편적인 단어라 연설문의 차이가 잘 드러나지 않았다. 반면, 오즈비 기준으로 추출한 단어는 두 연설문 중 한쪽에서 비중이 더 큰 단어이므로 이를 통해 연설문의 차이를 분명하게 알 수 있다.
+
+-----------
+
+## **2-4. 시각화**
+
+- 두 연설문의 중요한 단어를 비교하기 쉽도록 막대 그래프를 작성한다.
+
+```{r}
+# 그래프 작성을 위한 변수 추가
+top10 <- top10 %>%                                           # 오즈비가 높은 상위 10개의 단어와 낮은 하위 10개의 단어가 저장되어 있는 객체 in 2-3
+  mutate(president = ifelse(odds_ratio > 1, "moon", "park"), # 오즈비가 1보다 크면 변수 president에 "moon", 그렇지 않으면 "park" 할당 -> 오즈비가 1보다 크면 문재인 전 대통령의 연설문에서 상대적 비중이 높기 때문
+         n = ifelse(odds_ratio > 1, moon, park))             # 오즈비가 1보다 크면 변수 n에 변수 moon에 입력된 값 할당, 그렇지 않으면 변수 park에 입력된 값 할당
+
+top10
+
+ggplot(top10,                                      
+       aes(x = reorder_within(word, n, president),  # reorder_within : 항목별로 단어 빈도순 정렬
+           y = n,                           
+           fill = president)) +                     # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                                      # 막대 그래프
+  coord_flip() +                                    # 막대를 가로로 회전 
+  facet_wrap(~president,                            # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+             scales = "free_y") +                   # y축 통일 X
+  scale_x_reordered()                               # 단어 뒤의 대통령 이름 제거
+```
+
+`Result!` 그래프를 보면, 전반적으로 박근혜 전 대통령의 연설문에서 단어 빈도가 높으며 문재인 전 대통령의 연설문에서는 낮은 것처럼 보인다. 이는 박근혜 전 대통령의 연설문에서 가장 많이 사용한 단어인 "행복"의 빈도를 기준으로 두 그래프의 x축 크기를 똑같이 고정했기 때문이다. 그래프별로 x축 크기를 다르게 정해야 각 연설문의 단어 비중을 제대로 알 수 있다. 이를 위해 함수 `facet_wrap`의 옵션 `scales = "free"`을 지정하여 x축과 y축의 크기를 모두 그래프별로 정할 수 있다.  
+
+```{r}
+ggplot(top10,                                      
+       aes(x = reorder_within(word, n, president),  # reorder_within : 항목별로 단어 빈도순 정렬
+           y = n,                           
+           fill = president)) +                     # 대통령에 따라 막대 색깔 다르게 표현
+  geom_col() +                                      # 막대 그래프
+  coord_flip() +                                    # 막대를 가로로 회전 
+  facet_wrap(~president,                            # 변수 president의 항목별로 그래프 작성 -> 두 전 대통령 각각의 막대 그래프 작성
+             scales = "free") +                     # x축과 y축 통일 X
+  scale_x_reordered()                               # 단어 뒤의 대통령 이름 제거
+```
+
+`Result!` 그래프를 보면, 각 연설문에서 많이 사용한 단어 "복지국가"와 "행복"의 막대 길이는 같지만 빈도가 다르다. 이처럼 x축 크기가 그래프마다 다르면 막대 길이가 같아도 실제 값은 다르기 때문에 해석할 때 조심해야 한다.  
+`Caution!` 오즈비를 이용해 만든 막대 그래프는 각 텍스트에서 상대적으로 중요한 단어가 무엇인지 표현하기 위해 만든다. 막대 길이를 보고 두 텍스트의 단어 빈도를 비교하면 안 되고, 각 텍스트에서 상대적으로 중요한 단어가 무엇인지만 살펴봐야 한다.
+
+-----------
+
+## **2-5. 주요 단어가 사용된 문장 추출**
+
+- 두 연설문에서 상대적으로 중요한 단어가 무엇인지 확인하였으니, 이제 단어가 사용된 문장을 추출해 내용을 살펴본다.
+
+```{r}
+speeches_sentence <- bind_speeches %>%              # 두 연설문의 원문을 하나의 데이터셋으로 결합한 Dataset in 1
+  as_tibble() %>%                                   # Tibble 형태로 변환
+  unnest_tokens(input = value,                      # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = sentence,                  # 출력 변수명
+                token = "sentences")                # 문장 기준으로 토큰화
+
+head(speeches_sentence)                             # 토큰화 결과 앞부분 출력
+tail(speeches_sentence)                             # 토큰화 결과 뒷부분 출력
+
+speeches_sentence %>%
+  filter(president == "moon" & str_detect(sentence, "복지국가"))  # 문재인 전 대통령의 연설문에서 "복지국가"가 포함된 문장 추출
+
+speeches_sentence %>%
+  filter(president == "park" & str_detect(sentence, "행복"))      # 박근혜 전 대통령의 연설문에서 "행복"이 포함된 문장 추출
+```
+
+`Result!` 함수 `filter`와 `str_detect`를 이용하여 각 연설문에서 주요 단어를 사용한 문장을 추출할 수 있다. 추출한 문장을 보면 단어가 어떤 의미로 사용되었는지 알 수 있다.
+
+-----------
+
+## **2-6. 중요도가 비슷한 단어 추출**
+
+```{r}
+odds_df %>%                                  # 오즈비를 계산한 결과가 저장되어 있는 객체 in 2-2-2
+  arrange(abs(1 - odds_ratio)) %>%           # 오즈비가 1에 가까운 단어순으로 정렬
+  head(10)                                   # 상위 10개 단어 추출
+```
+
+`Result!` 출력 결과를 보면 대부분 보편적인 의미를 지니는 단어이며, 이러한 단어들은 빈도가 낮기 때문에 강조한 단어는 아니다.
+
+```{r}
+# 중요도가 비슷하면서 빈도가 높은 단어 추출
+odds_df %>%                                  # 오즈비를 계산한 결과가 저장되어 있는 객체 in 2-2-2
+  filter(moon >= 5 & park >= 5) %>%          # 두 연설문에서 5번 이상 사용한 단어만 추출
+  arrange(abs(1 - odds_ratio)) %>%           # 오즈비가 1에 가까운 단어순으로 정렬
+  head(10)                                   # 상위 10개 단어 추출
+```
+
+`Result!` 두 연설문 모두 "사회", "사람", "경제" 등을 강조했음을 알 수 있다.
+
+-----------
+
+# **3. 로그 오즈비**
+
+- 로그 오즈비(Log Odds Ratio)를 이용하면 단어가 두 텍스트 중 어떤 텍스트에서 비중이 큰지 부호로 판별할 수 있다.
+    - 오즈비가 1보다 크면 로그 오즈비는 양수
+        - 앞의 예제에서 문재인 전 대통령의 연설문에서 상대적으로 비중이 큰 단어는 로그 오즈비가 양수가 된다.
+    - 오즈비가 1보다 작으면 로그 오즈비는 음수
+        - 앞의 예제에서 박근혜 전 대통령의 연설문에서 상대적으로 비중이 큰 단어는 로그 오즈비가 음수가 된다.
+
+<center>
+![](./image/logodds.png){width=70%}
+</center>
+<br />
+
+- 단어 빈도 로그 오즈비는 단어 빈도 오즈비에 로그를 취해 계산하며, 수식으로 나타내면 다음과 같다.
+$$
+\begin{align*}
+\text{log odds ratio} = \log{\left(\frac{\left( \frac{n+1}{\text{total}+1} \right)_{\text{Text A}} }{ \left( \frac{n+1}{\text{total}+1} \right)_{\text{Text B}} }\right)}
+\end{align*}
+$$
+    - $n$ : 각 단어의 빈도
+    - total : 모든 단어의 빈도 합
+- 로그 오즈비로 막대 그래프를 작성하면 단어가 어느 텍스트에서 중요한지에 따라 반대되는 축 방향으로 표현되어 텍스트의 차이를 분명하게 드러낼 수 있다.
+    - 연설문 분석에 적용하면, 문재인 전 대통령의 연설문에서 중요한 단어는 막대가 오른쪽을 향하고 박근혜 전 대통령의 연설문에서 중요한 단어는 막대가 왼쪽을 향하게 된다. 
+
+-----------
+
+## **3-1. 로그 오즈비 변수 추가**
+
+```{r}
+logodds_df <- odds_df %>%                    # 오즈비를 계산한 결과가 저장되어 있는 객체 in 2-2-2
+  mutate(log_odds_ratio = log(odds_ratio))   # 로그 오즈비 계산
+
+# 문재인 전 대통령의 연설문에서 상대적 비중이 큰 단어
+logodds_df %>%
+  arrange(desc(log_odds_ratio))              # 로그 오즈비 내림차순 정렬
+
+# 박근혜 전 대통령의 연설문에서 상대적 비중이 큰 단어
+logodds_df %>%
+  arrange(log_odds_ratio)                    # 로그 오즈비 오름차순 정렬
+
+# 두 연설문에서 비중이 비슷한 단어
+logodds_df %>%
+  arrange(abs(log_odds_ratio))
+```
+
+-----------
+
+## **3-2. 시각화**
+
+```{r}
+# 그래프 작성을 위한 변수 추가
+top10 <- logodds_df %>%                                                 # 로그 오즈비가 저장되어 있는 객체 in 3-1
+  group_by(president = ifelse(log_odds_ratio > 0, "moon", "park")) %>%  # 로그 오즈비가 양수이면 변수 president에 "moon", 그렇지 않으면 "park" 할당한 후 그룹화
+  slice_max(abs(log_odds_ratio), n = 10,                                # 로그 오즈비의 절댓값 기준으로 상위 10개의 단어 추출 -> 앞에서 그룹화를 수행했기 때문에 각 연설문에서 상위 10개의 단어 추출
+            with_ties = F)                                              # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10 %>% 
+  arrange(desc(log_odds_ratio)) %>%                                     # 로그 오즈비 내림차순 정렬
+  select(word, log_odds_ratio, president) %>%                           # 변수 word, log_odds_ratio, president 선택
+  print(n = Inf)                                                        # 모든 행 출력
+```
+
+
+```{r}
+ggplot(top10, 
+       aes(x = reorder(word, log_odds_ratio),        # reorder : top10에서 단어에 따른 평균 로그 오즈비를 이용하여 내림차순 정렬
+           y = log_odds_ratio,             
+           fill = president)) +                      # 대통령에 따라 막대 색깔을 다르게 표현
+  geom_col() +                                       # 막대 그래프
+  coord_flip()                                       # 막대를 가로로 회전
+```
+
+`Caution!` 오즈비/로그 오즈비는 두 조건의 확률을 이용해 계산하므로 세 개 이상의 텍스트를 비교할 때 적절하지 않다는 단점이 있다. 텍스트를 둘씩 짝지어 따로 비교할 수도 있지만, 비교할 텍스트가 많으면 계산 절차가 번거롭고 결과를 해석하기 어렵기 때문에 효율적이지 않다.
+
+-----------
+
+# **4. TF-IDF**
+
+- TF-IDF (Term Frequency-Inverse Document Frequency) : 어떤 단어가 흔하지 않으면서도 특정 텍스트에서는 자주 사용된 정도를 나타낸 지표
+    - TF-IDF를 이용하면 텍스트의 개성을 드러내는 중요한 단어를 찾을 수 있다.
+- 셋 이상의 텍스트를 비교할 때는 TF-IDF를 활용한다.
+- TF-IDF에서 TF : 특정 텍스트에서 단어를 사용한 횟수, 즉, 단어 빈도
+
+<center>
+![](./image/tf.png){width=70%}
+</center>
+</br>
+
+- TF-IDF에서 DF : 단어를 사용한 텍스트 수, 즉, 문서 빈도
+    - `DF가 클수록 여러 문서에서 흔하게 사용한 일반적인 단어`라고 할 수 있다.
+- TF-IDF에서 IDF : 역문서 빈도로 전체 문서 수($N$)에서 DF가 차지하는 비중을 구하고, 그 값의 역수에 로그를 취한값 
+$$
+\begin{align*}
+\text{IDF} = \log{\left(\frac{N}{\text{DF}}\right)}
+\end{align*}
+$$
+    - `IDF는 DF의 역수`이므로 DF가 클수록 작아지고, 반대로 DF가 작을수록 커진다.
+    - 즉, `IDF가 클수록 드물게 사용한 특이한 단어, IDF가 작을수록 흔하게 사용한 일반적인 단어`라고 할 수 있다.
+    
+<center>
+![](./image/idf.png){width=100%}
+</center>
+</br>
+
+- TF-IDF : TF(단어 빈도)와 IDF(역문서 빈도)를 곱한 값
+$$
+\begin{align*}
+\text{TF-IDF} = \text{TF}\times\log{\left(\frac{N}{\text{DF}}\right)}
+\end{align*}
+$$
+    - 어떤 단어가 분석 대상이 되는 텍스트 내에서 많이 사용되고 동시에 해당 단어를 사용한 텍스트가 드물수록 값이 커지는 특성이 있다.
+    - 즉, 흔하지 않은 단어인데 특정 텍스트에서 자주 사용될수록 큰 값을 가진다.
+    - 각 텍스트에서 TF-IDF가 큰 단어를 보면 다른 텍스트와 구별되는 특징을 알 수 있다.
+
+<center>
+![](./image/tf-idf.png){width=100%}
+</center>
+</br>
+
+----------
+
+```{r, eval=F} 
+# 데이터 불러오기
+# speeches_presidents : 역대 대통령의 대선 출마 선언문을 담은 데이터 파일
+raw_speeches <- read_csv(".../speeches_presidents.csv")
+raw_speeches
+```
+
+```{r, echo=F}
+# 데이터 불러오기
+raw_speeches <- read_csv("C:/Users/User/Desktop/쉽게 배우는 R 텍스트 마이닝/Data/speeches_presidents.csv")
+raw_speeches
+```
+
+```{r}
+# 전처리
+speeches <- raw_speeches %>%
+  mutate(value = str_replace_all(value,      
+                                 "[^가-힣]", # [^가-힣] : 한글을 제외한 모든 문자를 의미하는 정규 표현식
+                                 " "),       # 공백으로 변경
+         value = str_squish(value))          # 연속된 공백 제거
+
+speeches
+
+
+# 토큰화
+speeches <- speeches %>%
+  unnest_tokens(input = value,               # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,               # 출력 변수명
+                token = extractNoun)         # 명사 기준으로 토큰화
+speeches
+```
+
+
+------------
+
+## **4-1. 단어 빈도 계산**
+
+```{r}
+# 단어 빈도 구하기
+frequency <- speeches %>%                    # 전처리 & 토큰화를 수행한 결과가 저장되어 있는 객체 "speeches"
+  count(president, word) %>%                 # 연설문 각각의 단어 빈도 계산
+  filter(str_count(word) > 1)                # 두 글자 이상의 단어만 추출 -> 한 글자로 된 단어 제거
+
+frequency   
+```
+
+-----------
+
+## **4-2. TF-IDF 계산**
+
+- Package `"tidytext"`의 함수 `bind_tf_idf(tbl, term, document, n)`를 이용하여 TF-IDF를 계산할 수 있다.
+    - `tbl` : TF-IDF를 수행할 객체
+    - `term` : 단어가 입력되어 있는 변수
+    - `document` : 텍스트 구분 변수
+    - `n` : 단어 빈도가 입력되어 있는 변수
+
+```{r}
+frequency <- frequency %>%           # 단어 빈도가 저장되어 있는 객체 in 4-1
+  bind_tf_idf(term = word,           # 단어가 입력되어 있는 변수
+              document = president,  # 텍스트 구분 변수
+              n = n) %>%             # 단어 빈도가 입력되어 있는 변수
+  arrange(desc(tf_idf))              # TF-IDF 내림차순 정렬
+
+frequency
+```
+
+`Result!` 결과를 보면 변수 `tf`, `idf`, `tf-idf`가 추가되었다. 변수 `tf`에 입력된 값은 해당 문서에서 몇 번 사용하였는지를 나타내는 단순 빈도가 아니라 단어 사용 비율("해당 단어의 빈도 수/모든 단어의 빈도 합")을 의미한다.
+
+------------
+
+`Caution!` TF-IDF를 이용하면 텍스트의 특징을 드러내는 중요한 단어가 무엇인지 파악할 수 있다. 변수 `tf-idf`가 높은 단어를 살펴보면 각 대통령이 다른 대통령들과 달리 무엇을 강조했는지 알 수 있다. 반면, TF-IDF가 낮은 단어를 살펴보면 역대 대통령들이 공통으로 사용한 흔한 단어가 무엇인지 파악할 수 있다.
+
+```{r}
+# 문재인 전 대통령의 연설문만 추출
+frequency %>% 
+  filter(president == "문재인") %>%
+  arrange(desc(tf_idf))                   # TF-IDF가 높은 단어순으로 정렬
+
+frequency %>% 
+  filter(president == "문재인") %>%
+  arrange(tf_idf)                         # TF-IDF가 낮은 단어순으로 정렬
+
+# 박근혜 전 대통령의 연설문만 추출
+frequency %>% 
+  filter(president == "박근혜") %>%
+  arrange(desc(tf_idf))                   # TF-IDF가 높은 단어순으로 정렬
+
+frequency %>% 
+  filter(president == "박근혜") %>%
+  arrange(tf_idf)                         # TF-IDF가 낮은 단어순으로 정렬
+
+
+# 이명박 전 대통령의 연설문만 추출
+frequency %>% 
+  filter(president == "이명박") %>%
+  arrange(desc(tf_idf))                   # TF-IDF가 높은 단어순으로 정렬
+
+frequency %>% 
+  filter(president == "이명박") %>%
+  arrange(tf_idf)                         # TF-IDF가 낮은 단어순으로 정렬
+
+
+# 노무현 전 대통령의 연설문만 추출
+frequency %>% 
+  filter(president == "노무현") %>%
+  arrange(desc(tf_idf))                   # TF-IDF가 높은 단어순으로 정렬
+
+frequency %>% 
+  filter(president == "노무현") %>%
+  arrange(tf_idf)                         # TF-IDF가 낮은 단어순으로 정렬
+```
+
+------------
+
+## **4-3. 시각화**
+
+- 각 연설문에서 TF-IDF가 높은 단어를 추출해 막대 그래프를 작성한다.
+
+```{r}
+# 1. 주요 단어 추출 (TF-IDF가 높은 상위 단어 추출)
+top10 <- frequency %>%                    # TF-IDF가 저장되어 있는 객체 in 4-2
+  group_by(president) %>%                 # 변수 president에 대해 그룹화 -> 각각의 연설문에서 빈도가 높은 단어를 추출하기 위해 수행
+  slice_max(tf_idf, 
+            n = 10,                       # TF-IDF가 높은 상위 10개 단어 추출
+            with_ties = F)                # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+
+# 2. 그래프 순서를 정하기 위한 Factor 변환
+top10$president <- factor(top10$president,                                    # factor : 범주형으로 변환
+                          levels = c("문재인", "박근혜", "이명박", "노무현")) # levels = 그래프 순서
+
+# 3. 막대 그래프
+ggplot(top10, 
+       aes(x = reorder_within(word, tf_idf, president),  # reorder_within : 항목별로 단어 빈도순 정렬
+           y = tf_idf,          
+            fill = president)) +                         # 대통령에 따라 막대 색깔을 다르게 표현  
+  geom_col(show.legend = F) +                            # 막대 그래프 
+  coord_flip() +                                         # 막대를 가로로 회전
+  facet_wrap(~president,                                 # 변수 president의 항목별로 그래프 작성 -> 대통령 각각의 막대 그래프 작성
+             scales = "free",                            # x축과 y축 통일 X
+             ncol = 2) +                                 # 한 행에 나타낼 그래프 개수
+  scale_x_reordered()                                    # 단어 뒤의 대통령 이름 제거
+```
+
+`Result!` 그래프를 보면, 역대 대통령의 개성을 드러내는 단어를 파악할 수 있다.  
+`Caution!` 모든 문서에 사용된 단어는 IDF가 0이므로 TF-IDF도 0이 된다. 따라서 TF-IDF를 활용하면 어떤 단어가 특정 문서에 특출나게 많이 사용되더라도 모든 문서에 사용되면 발견할 수 없는 한계가 있다. "Weighted log odds"를 활용하면 이런 한계를 극복할 수 있다. Weighted log odds는 단어 등장 확률을 가중치로 이용하기 때문에 어떤 단어가 모든 문서에 사용되더라도 특정 문서에 많이 사용되면 발견할 수 있다. 또한, 오즈비와 달리 셋 이상의 문서를 비교할 때도 사용할 수 있는 장점이 있다. Weighted log odds는 Package `"tidylo"`를 이용하면 쉽게 구할 수 있다. 해당 패키지의 자세한 설명은 [여기](https://github.com/juliasilge/tidylo)를 참고한다.
+
+------------
+
+# **요약**
+
+```{r}
+# 1. 단어 빈도 비교
+speeches <- bind_speeches %>%                # 두 연설문의 원문을 하나의 데이터셋으로 결합한 Dataset
+  # 전처리
+  mutate(value = str_replace_all(value,      
+                                 "[^가-힣]", # [^가-힣] : 한글을 제외한 모든 문자를 의미하는 정규 표현식
+                                 " "),       # 공백으로 변경
+         value = str_squish(value)) %>%      # 연속된 공백 제거
+  # 토큰화
+  unnest_tokens(input = value,               # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,               # 출력 변수명
+                token = extractNoun)         # 명사 기준으로 토큰화
+
+speeches
+
+# 연설문별 단어 빈도 구하기
+frequency <- speeches %>%
+  count(president, word) %>%                  # 연설문 각각의 단어 빈도 계산
+  filter(str_count(word) > 1)                 # 두 글자 이상의 단어만 추출 -> 한 글자로 된 단어 제거
+
+frequency
+
+# 가장 많이 사용된 단어 추출
+top10 <- frequency %>%
+  group_by(president) %>%                    # 변수 president에 대해 그룹화 -> 각각의 연설문에서 빈도가 높은 단어를 추출하기 위해 수행
+  slice_max(n, n = 10,                       # 빈도가 가장 높은 10개의 단어 추출 
+            with_ties = F)                   # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+
+# 2. 오즈비
+# Wide Form 형태로 변환
+frequency_wide <- frequency %>%
+  pivot_wider(names_from = president,               # 변수명으로 입력할 값이 들어 있는 변수
+              values_from = n,                      # 변수에 채워 넣을 값이 들어 있는 변수
+              values_fill = list(n = 0))            # 결측치 NA를 0으로 대체
+
+frequency_wide
+
+# 오즈비/로그 오즈비 계산
+frequency_wide <- frequency_wide %>%
+  mutate(ratio_moon = ((moon + 1)/(sum(moon + 1))),  # 문재인 전 대통령의 연설문에서 단어의 비중 계산
+         ratio_park = ((park + 1)/(sum(park + 1))),  # 박근혜 전 대통령의 연설문에서 단어의 비중 계산
+         odds_ratio = ratio_moon/ratio_park,         # 오즈비 계산
+         log_odds_ratio = log(odds_ratio))           # 로그 오즈비 계산
+
+frequency_wide
+
+# 로그 오즈비를 기준으로 상대적으로 중요한 단어 추출
+top10 <- frequency_wide %>%
+  group_by(president = ifelse(log_odds_ratio > 0, "moon", "park")) %>%  # 로그 오즈비가 양수이면 변수 president에 "moon", 그렇지 않으면 "park" 할당한 후 그룹화
+  slice_max(abs(log_odds_ratio), n = 10,                                # 로그 오즈비의 절댓값 기준으로 상위 10개의 단어 추출 -> 앞에서 그룹화를 수행했기 때문에 각 연설문에서 상위 10개의 단어 추출
+            with_ties = F)                                              # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+
+# 3. TF-IDF 계산
+frequency <- frequency %>%           # 단어 빈도가 저장되어 있는 객체  
+  bind_tf_idf(term = word,           # 단어가 입력되어 있는 변수
+              document = president,  # 텍스트 구분 변수
+              n = n) %>%             # 단어 빈도가 입력되어 있는 변수
+  arrange(desc(tf_idf))              # TF-IDF 내림차순 정렬
+
+frequency
+
+# TF-IDF 기준으로 상대적으로 중요한 단어 추출
+top10 <- frequency %>%
+  group_by(president) %>%            # 변수 president에 대해 그룹화
+  slice_max(n, n = 10,               # TF-IDF가 가장 높은 10개의 단어 추출 
+            with_ties = F)           # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+
+```
+

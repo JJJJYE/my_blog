@@ -1,0 +1,684 @@
+---
+title: "Word Frequency Analysis"
+description: |
+  Description for Word Frequency Analysis
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-10-01
+categories: Text Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+- **참고 : Do it! 쉽게 배우는 R 텍스트 마이닝***
+
+----------
+
+# **패키지 설치**
+
+```{r}
+pacman::p_load("stringr",
+               "dplyr",
+	           "tidytext",
+               "ggplot2", "ggwordcloud",
+               "showtext")
+```
+
+----------
+
+# **1. 텍스트 전처리**
+
+- 텍스트 전처리 : 텍스트를 분석하는 데 불필요한 요소를 제거하고 다루기 쉬운 형태로 만드는 과정
+- 텍스트 분석에서는 전처리에 따라 분석 결과가 크게 달라지기 때문에 매우 중요하다.
+
+---------
+
+## **1-1. 불필요한 문자 제거**
+
+- Package `"stringr"`의 함수 `str_replace_all(string, pattern, replacement)` : 텍스트에서 특정 규칙에 해당하는 문자를 찾아 다른 문자로 바꾸는 함수
+    - `string` : 처리할 텍스트
+    - `pattern` : 규칙
+    - `replacement` : 변경할 문자
+
+```{r}
+txt <- "치킨은!! 맛있다. xyz 정말 맛있다!@#"
+txt
+
+str_replace_all(string = txt,          
+                pattern = "[^가-힣]",    # [^가-힣] : 한글을 제외한 모든 문자를 의미하는 정규 표현식
+                replacement = " ")       # 공백으로 변경
+```
+
+`Result!` `replacement`에 공백 `" "`을 입력하여 한글을 제외한 모든 문자는 제거한다.
+
+-----------
+
+`Caution!` 정규 표현식은 특정한 규칙을 가진 문자열을 표현하는 언어이며, 특정 조건에 해당하는 문자를 찾거나 수정할 때 활용한다. 유용하게 사용하는 정규 표현식은 아래와 같다.
+
+<center><img src="./image/정규표현식.png" width="600" height="450"></center>
+
+<br />
+
+---------
+
+## **1-2. 연속된 공백 제거**
+
+- Package `"stringr"`의 함수 `str_squish` : 연속된 공백을 제거하고 공백을 하나만 남기는 함수
+
+```{r}
+txt <- "치킨은   맛있다   정말 맛있다"
+txt
+
+str_squish(txt)
+```
+
+-----------
+
+> **문재인 대통령 대선 출마 연설문을 이용한 텍스트 전처리**
+
+- 함수 `readLines`를 이용하여 텍스트 파일로 저장되어 있는 문재인 대통령 대선 출마 연설문을 불러온다.
+
+```{r, eval=F} 
+# 데이터 불러오기 
+raw_moon <- readLines(".../speech_moon.txt",         
+                      encoding = "UTF-8") 
+
+head(raw_moon)
+```
+
+```{r, echo=F}
+raw_moon <- readLines("C:/Users/User/Desktop/쉽게 배우는 R 텍스트 마이닝/Data/speech_moon.txt", encoding = "UTF-8")
+
+head(raw_moon)
+```
+
+```{r}
+# 1. 불필요한 문자 제거
+moon <- str_replace_all(string = raw_moon,          
+                        pattern = "[^가-힣]",    # [^가-힣] : 한글을 제외한 모든 문자를 의미하는 정규 표현식
+                        replacement = " ")       # 공백으로 변경
+ 
+head(moon)
+
+# 2. 연속된 공백 제거
+str_squish(moon)
+
+head(moon)
+
+## 전처리 작업 한 번에 하기
+moon <- raw_moon %>%
+ str_replace_all("[^가-힣]", " ") %>%           # 한글을 제외한 모든 문자를 공백으로 변경
+ str_squish() %>%                               # 연속된 공백 제거
+ as_tibble()                                    # Tibble 형태로 변환
+
+moon
+```
+
+-----------
+
+`Caution!` Package `"dplyr"`의 함수 `as_tibble`는 입력한 객체를 Tibble 형태로 변환한다. Tibble은 데이터 프레임(Data Frame)을 다루기 편하게 개선한 형태로 다음과 같은 특징을 가지고 있다.  
+
+- 한 행에 한 단락이 들어있다.  
+- 긴 문장은 Console 창에서 보기 편하게 일부만 출력한다.
+- 행과 열의 개수를 알 수 있다.
+- 변수의 속성을 알 수 있다.
+
+<center><img src="./image/tibble.png" width="500" height="500"></center>
+
+<br />
+
+```{r}
+# R에서 제공하는 iris Dataset
+data(iris)          # 데이터 불러오기
+
+iris                # Data Frame 형태로 출력
+
+as_tibble(iris)     # Tibble 형태로 변환 
+```
+
+-----------
+
+# **2. 토큰화**
+
+- 토큰(Token) : 텍스트의 기본 단위(ex: 단락, 문장, 단어, 형태소)
+- 토큰화 : 텍스트를 토큰으로 나누는 작업
+- Package `"tidytext"` :  텍스트를 정돈된 데이터(Tidy Data) 형태로 유지하며 분석할 수 있게 도와주는 패키지
+    - 해당 패키지는 Package `"dplyr"`와 `"ggplot2"`를 함께 활용하면 편리하게 텍스트를 분석할 수 있다.  
+- Package `"tidytext"`의 함수 `unnest_tokens(tbl, input, output, token)`를 이용하여 토큰화를 수행할 수 있다.
+    - `tbl` : 데이터 프레임 / Tibble 형태의 데이터
+    - `input` : 토큰화를 수행할 텍스트가 포함된 변수명
+    - `output` : 출력 변수명
+    - `token` : 텍스트를 나누는 기준
+        - `sentences` : 문장 기준
+        - `words` : 띄어쓰기 기준
+        - `characters` : 글자 기준
+
+-----------
+
+## **2-1. 문장 기준 토큰화**
+
+```{r}
+# Tibble 형태의 데이터
+text <- tibble(value = "대한민국은 민주공화국이다. 
+               대한민국의 주권은 국민에게 있고, 
+               모든 권력은 국민으로부터 나온다.")     
+text
+
+# 문장 기준 토큰화
+text %>%
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = "sentences")  # "sentences" : 문장 기준으로 토큰화
+```
+
+-----------
+
+## **2-2. 띄어쓰기 기준 토큰화**
+
+```{r}
+# Tibble 형태의 데이터
+text <- tibble(value = "대한민국은 민주공화국이다. 
+               대한민국의 주권은 국민에게 있고, 
+               모든 권력은 국민으로부터 나온다.") 
+text
+
+# 띄어쓰기 기준 토큰화
+text %>%
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = "words")      # "words" : 띄어쓰기 기준으로 토큰화
+```
+
+-----------
+
+## **2-3. 글자 기준 토큰화**
+
+```{r}
+# Tibble 형태의 데이터
+text <- tibble(value = "대한민국은 민주공화국이다. 
+               대한민국의 주권은 국민에게 있고, 
+               모든 권력은 국민으로부터 나온다.") 
+text
+
+# 글자 기준 토큰화
+text %>%
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = "characters") # "characters" : 글자 기준으로 토큰화
+```
+
+-----------
+
+> **문재인 대통령 대선 출마 연설문을 이용한 토큰화**
+
+```{r}
+moon                                  # 전처리를 수행한 결과가 저장되어 있는 객체 "moon"
+
+# 1. 문장 기준 토큰화
+sentance_space <- moon %>%            
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = "sentences")  # "sentences" : 문장 기준으로 토큰화
+sentance_space
+
+# 2. 띄어쓰기 기준 토큰화
+word_space <- moon %>%                
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = "words")      # "words" : 띄어쓰기 기준으로 토큰화  
+word_space
+
+# 3. 글자 기준 토큰화
+char_space <- moon %>%                
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = "characters") # "characters" : 글자 기준으로 토큰화  
+char_space
+```
+
+-----------
+
+# **3. 단어 빈도 분석**
+
+- 단어 빈도 분석(Word Frequency Analysis) : 텍스트에 어떤 단어를 얼마나 사용하였는지 알아보는 분석 방법
+    - 자주 사용한 단어를 보면 글쓴이가 무엇을 강조하고자 하는지 알 수 있다.
+
+-----------
+
+## **3-1. 단어 빈도 계산**
+
+- Package `"dplyr"`의 함수 `count`를 이용하면 단어의 빈도를 계산할 수 있다.
+    - 함수 `count`의 옵션 `sort = T`을 지정하면 빈도가 높은 순(내림차순)으로 단어를 정렬한다.
+  
+```{r}
+word_count <- word_space %>%       # 문재인 대통령 대선 출마 연설문을 "띄어쓰기 기준"으로 토큰화한 결과가 저장되어 있는 객체 "word_space"
+ count(word,                       # 변수명 
+       sort = T)                   # 내림차순으로 정렬
+
+word_count
+```
+
+`Result!` "합니다"를 27번으로 가장 많이 사용하였고, 그 뒤로는 "수", "있습니다"를 많이 사용하였다.
+
+-----------
+
+## **3-2. 한 글자로 된 단어 제거**
+
+- 한 글자로 된 단어는 어떤 의미로 사용하였는지 파악하기 어렵기 때문에 분석 대상에서 제외하는 게 좋다.
+- Package `"stringr"`의 함수 `str_count`를 이용하여 문자열의 글자 수를 계산할 수 있다.
+
+```{r}
+# "배"의 글자 수 
+str_count("배")
+
+# "사과"의 글자 수 
+str_count("사과")
+```
+
+
+```{r}
+word_count1 <- word_count %>%       # 단어 빈도가 저장되어 있는 객체 in 3-1
+  filter(str_count(word) > 1)       # 두 글자 이상의 단어만 추출 -> 한 글자로 된 단어 제거
+
+word_count1
+```
+
+`Result!` 함수 `str_count`는 글자 수를 계산하는 함수이고, 함수 `filter`는 조건에 맞는 행만 추출하는 함수이다. 이 두 함수를 이용하여 한 글자로 된 단어를 제거할 수 있다.
+
+-----------
+
+## **3-3. 자주 사용한 단어 추출**
+
+```{r}
+# 자주 사용한 상위 20개 단어
+top20 <- word_count1 %>%            # 단어 빈도가 내림차순으로 정렬 & 두 글자 이상의 단어만 저장되어 있는 객체 
+  head(20)                          # 상위 20개의 단어 추출
+
+top20
+```
+
+-----------
+
+## **3-4. 시각화**
+
+### **3-4-1. 막대 그래프**
+- Package `"ggplot2"`의 함수 `geom_col`을 이용하면 막대 그래프를 만들 수 있다.
+- 막대 그래프를 이용하여 어떤 단어를 얼마나 많이 사용하였는지 쉽게 파악할 수 있다.
+
+
+```{r}
+# 기본 막대 그래프
+ggplot(top20,                                         # 자주 사용한 상위 20개 단어가 저장되어 있는 객체 in 3-3
+       aes(x = reorder(word, n), y = n)) +            # reorder : 단어 빈도순 정렬
+  geom_col() +                                        # 막대 그래프
+  coord_flip()                                        # 막대를 가로로 회전
+```
+
+```{r}
+# 그래프 다듬기
+ggplot(top20,                                         # 자주 사용한 상위 20개 단어가 저장되어 있는 객체 in 3-3
+       aes(x = reorder(word, n), y = n)) +            # reorder : 단어 빈도순 정렬
+  geom_col() +                                        # 막대 그래프
+  coord_flip() +                                      # 막대를 가로로 회전
+  geom_text(aes(label = n), hjust = -0.3) +           # 막대 밖 빈도 표시
+  labs(title = "문재인 대통령 출마 연설문 단어 빈도", # 그래프 제목
+       x = "", y = "") +                              # x축, y축 이름
+  theme(title = element_text(size = 12))              # 그래프 제목 크기
+```
+
+-----------
+
+#### **그래프 폰트 변경**
+
+그래프의 폰트를 한글 지원 폰트로 바꾸면 한글을 아름답게 표현할 수 있다. Package `"showtext"`의 함수 `font_add_google`을 이용해 [구글 폰트](https://fonts.google.com/)에서 사용할 폰트를 불러온 다음 `showtext_auto()`를 실행해 폰트를 R에서 활용하도록 설정한다. 주의해야할 점은 R을 종료하면 폰트 설정이 사라지기 때문에 시작할 때마다 Package `"showtext"`를 이용하여 구글 폰트를 불러와 설정해야 한다.
+
+```{r}
+# 감자꽃마을 폰트 불러오기
+font_add_google(name = "Gamja Flower",               # 구글 폰트에서 사용하고자 하는 폰트 이름 
+                family = "gamjaflower")              # R에서 사용할 폰트 이름 -> 사용자 지정
+showtext_auto()
+
+# 막대 그래프
+ggplot(top20,                                         # 자주 사용한 상위 20개 단어가 저장되어 있는 객체 in 3-3
+       aes(x = reorder(word, n), y = n)) +            # reorder : 단어 빈도순 정렬
+  geom_col() +                                        # 막대 그래프
+  coord_flip() +                                      # 막대를 가로로 회전
+  geom_text(aes(label = n), hjust = -0.3) +           # 막대 밖 빈도 표시
+  labs(title = "문재인 대통령 출마 연설문 단어 빈도", # 그래프 제목
+      x = "", y = "") +                               # x축, y축 이름
+  theme(title = element_text(size = 12),              # 그래프 제목 크기
+        text = element_text(family = "gamjaflower"))  # 폰트 적용
+```
+
+-----------
+
+### **3-4-2. 워드 클라우드**
+
+- 워드 클라우드(Word Cloud) : 단어 빈도를 구름 모양으로 표현한 그래프
+    - 빈도에 따라 단어 크기와 색을 다르게 표현할 수 있다.
+- 워드 클라우드는 Package `"ggwordcloud"`의 함수 `geom_text_wordcloud`를 이용하여 만들 수 있다.
+    - 난수를 이용하기 때문에 그래프를 만들 때마다 모양이 바뀌며, 이를 방지하기 위해 "seed" 값을 입력하여 항상 같은 모양을 얻을 수 있다.
+
+```{r}
+# 기본 워드 클라우드
+ggplot(word_count1,                   # 단어 빈도가 내림차순으로 정렬 & 두 글자 이상의 단어만 저장되어 있는 객체 in 3-2
+       aes(label = word, 
+           size = n)) +               # 빈도에 따라 단어의 크기를 다르게 표현
+ geom_text_wordcloud(seed = 1234) +   # seed값 입력 -> 항상 같은 모양의 그래프를 출력
+ scale_radius(limits = c(3, NA),      # 최소, 최대 단어 빈도
+              range = c(3, 30))       # 최소, 최대 글자 크기
+```
+
+```{r}
+# 그래프 다듬기
+ggplot(word_count1,                           # 단어 빈도가 내림차순으로 정렬 & 두 글자 이상의 단어만 저장되어 있는 객체 in 3-2
+       aes(label = word, 
+           size = n,                          # 빈도에 따라 단어의 크기를 다르게 표현
+           col = n)) +                        # 빈도에 따라 단어의 색깔을 다르게 표현
+  geom_text_wordcloud(seed = 1234) +          # seed값 입력 -> 항상 같은 모양의 그래프를 출력
+  scale_radius(limits = c(3, NA),             # 최소, 최대 단어 빈도
+               range = c(3, 30)) +            # 최소, 최대 글자 크기
+  scale_color_gradient(low = "#66aaf2",       # 최소 빈도 색깔
+                       high = "#004EA1") +    # 최고 빈도 색깔
+  theme_minimal()                             # 배경 없는 테마 적용
+```
+
+```{r}
+# 그래프 폰트 변경
+# 나눔고딕 폰트 불러오기
+font_add_google(name = "Nanum Gothic",          # 구글 폰트에서 사용하고자 하는 폰트 이름 
+                family = "nanumgothic")         # R에서 사용할 폰트 이름 -> 사용자 지정
+showtext_auto()
+
+# 워드 클라우드
+ggplot(word_count1,                             # 단어 빈도가 내림차순으로 정렬 & 두 글자 이상의 단어만 저장되어 있는 객체 in 3-2
+       aes(label = word, 
+           size = n,                            # 빈도에 따라 단어의 크기를 다르게 표현
+           col = n)) +                          # 빈도에 따라 단어의 색깔을 다르게 표현
+ geom_text_wordcloud(seed = 1234,               # seed값 입력 -> 항상 같은 모양의 그래프를 출력
+                     family = "nanumgothic") +  # 폰트 적용
+ scale_radius(limits = c(3, NA),                # 최소, 최대 단어 빈도
+              range = c(3, 30)) +               # 최소, 최대 글자 크기
+ scale_color_gradient(low = "#66aaf2",          # 최소 빈도 색깔
+                      high = "#004EA1") +       # 최고 빈도 색깔
+ theme_minimal()                                # 배경 없는 테마 적용
+```
+
+```{r}
+# 검은고딕 폰트 불러오기
+font_add_google(name = "Black Han Sans",         # 구글 폰트에서 사용하고자 하는 폰트 이름 
+                family = "blackhansans")         # R에서 사용할 폰트 이름 -> 사용자 지정
+showtext_auto()
+
+# 워드 클라우드
+ggplot(word_count1,                              # 단어 빈도가 내림차순으로 정렬 & 두 글자 이상의 단어만 저장되어 있는 객체 in 3-2
+       aes(label = word, 
+           size = n,                             # 빈도에 따라 단어의 크기를 다르게 표현
+           col = n)) +                           # 빈도에 따라 단어의 색깔을 다르게 표현
+  geom_text_wordcloud(seed = 1234,               # seed값 입력 -> 항상 같은 모양의 그래프를 출력
+                      family = "blackhansans") + # 폰트 적용
+  scale_radius(limits = c(3, NA),                # 최소, 최대 단어 빈도
+               range = c(3, 30)) +               # 최소, 최대 글자 크기
+  scale_color_gradient(low = "#66aaf2",          # 최소 빈도 색깔
+                       high = "#004EA1") +       # 최고 빈도 색깔
+  theme_minimal()                                # 배경 없는 테마 적용
+```
+
+`Caution!` 워드 클라우드는 디자인이 아름다워서 자주 사용하지만 분석 결과를 정확하게 표현하는 데는 적합하지 않다. 단어 빈도를 크기와 색으로 표현하므로 "어떤 단어를 몇 번 사용하였는지" 정확히 알 수 없고, 단어 배치가 산만해서 "어떤 단어를 다른 단어보다 얼마나 더 많이 사용하였는지" 비교하기 어렵다. 분석 결과를 정확하게 표현하는 것이 목적이라면 워드 클라우드보다는 막대 그래프를 이용하는 게 좋다.
+
+-----------
+
+# **4. 형태소 분석**
+
+- 형태소(Morpheme) : 의미를 지닌 가장 작은 말의 단위
+    - 형태소는 더 나누면 뜻이 없는 문자가 된다.
+- 형태소 분석(Morphological Analysis) : 문장에서 형태소를 추출해 명사, 동사, 형용사 등 품사로 분류하는 작업 
+- 띄어쓰기 기준으로 토큰화하면 "합니다", "있습니다"와 같은 의미를 지니지 않는 서술어가 가장 많이 추출되어 빈도 분석을 해도 텍스트가 무엇을 강조하는 지 알기 어렵기 때문에 한글을 토큰화할 때는 형태소를 기준으로 한다.
+    - 특히, 명사는 텍스트가 무엇에 관한 내용인지 파악할 수 있기 때문에 텍스트에서 명사만 추출해 분석할 때가 많다.
+    
+-----------
+
+## **4-1. 패키지 설치**
+    
+- 한글 텍스트의 형태소 분석은 Package `"KoNLP"`를 이용할 수 있다.
+    - Package `"KoNLP"`를 설치하기 위해 3가지 과정을 거친다.
+        1. 자바와 rJava 설치
+        2. Package `"KoNLP"`의 의존성 Package 설치
+        3. Package `"KoNLP"` 설치
+
+```{r, eval = FALSE}
+# 1. 자바와 rJava 설치
+install.packages("multilinguer")
+library(multilinguer)
+install_jdk()
+```
+
+```{r, eval = FALSE}
+# 2. Package "KoNLP"의 의존성 Package 설치
+install.packages(c("stringr", "hash", "tau", "Sejong", "RSQLite", "devtools"),
+                 type = "binary")
+```
+
+```{r, eval = FALSE}
+# 3. Package "KoNLP" 설치
+install.packages("remotes")
+library(remotes)
+remotes::install_github("haven-jeon/KoNLP",
+                        upgrade = "never",
+                        INSTALL_opts = c("--no-multiarch"))
+library(KoNLP)
+```
+
+```{r, echo = FALSE}
+library(KoNLP)
+```
+
+
+------------
+
+## **4-2. 형태소 사전 설정**
+
+- Package `"KoNLP"`가 사용하는 "NIA 사전"은 120만여 개 단어로 구성되며, 형태소 분석을 할 때 NIA 사전을 사용하도록 `useNIADic()`를 실행한다.
+
+```{r}
+useNIADic()
+```
+
+------------
+
+## **4-3. 토큰화**
+
+- Package `"KoNLP"`의 함수 `extractNoun` : 텍스트의 형태소를 분석해 명사를 추출하는 함수
+    - 각 문장에서 추출한 명사를 `list` 형태로 출력한다.
+    
+```{r}
+# Tibble 형태의 데이터
+text <- tibble(
+  value = c("대한민국은 민주공화국이다.",
+            "대한민국의 주권은 국민에게 있고, 모든 권력은 국민으로부터 나온다."))
+text
+
+extractNoun(text$value)
+```
+
+`Caution!` Package `"tidytext"`의 함수 `unnest_tokens` 옵션 `token`에 `extractNoun`를 입력하면 다루기 쉬운 Tibble 형태로 명사를 출력한다. 
+
+```{r}
+text %>%
+  unnest_tokens(input = value,        # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,        # 출력 변수명
+                token = extractNoun)  # 명사 기준으로 토큰화
+```
+
+-----------
+
+> **문재인 대통령 대선 출마 연설문을 이용한 명사 기준 토큰화**
+
+```{r}
+# Ver.1 : Package `"KoNLP"`의 함수 `extractNoun`
+extractNoun(moon$value)                # 전처리를 수행한 결과가 저장되어 있는 객체 "moon"
+
+# Ver.2 : Package `"tidytext"`의 함수 `unnest_tokens`
+word_noun <- moon %>%                  # 전처리를 수행한 결과가 저장되어 있는 객체 "moon"
+  unnest_tokens(input = value,         # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,         # 출력 변수명
+                token = extractNoun)   # 명사 기준으로 토큰화
+word_noun
+```
+
+-----------
+
+# **5. 명사 빈도 분석**
+
+- 단어 빈도 분석과 동일한 방법으로 수행된다.
+
+```{r}
+# 1. 단어 빈도 계산
+word_noun <- word_noun %>%
+  count(word, sort = T) %>%    # 단어 빈도를 계산해 내림차순으로 정렬
+  filter(str_count(word) > 1)  # 두 글자 이상의 단어만 추출 -> 한 글자로 된 단어 제거
+
+word_noun
+
+# 2. 자주 사용한 상위 20개 단어
+top20 <- word_noun %>%
+  head(20)                     # 상위 20개의 단어 추출            
+
+top20
+
+
+# 3. 시각화
+# 3-1. 막대 그래프
+# 나눔고딕 폰트 불러오기
+font_add_google(name = "Nanum Gothic",                # 구글 폰트에서 사용하고자 하는 폰트 이름 
+                family = "nanumgothic")               # R에서 사용할 폰트 이름 -> 사용자 지정
+showtext_auto()
+
+ggplot(top20,  
+       aes(x = reorder(word, n), y = n)) +            # reorder : 단어 빈도순 정렬
+  geom_col() +                                        # 막대 그래프
+  coord_flip() +                                      # 막대를 가로로 회전
+  geom_text(aes(label = n), hjust = -0.3) +           # 막대 밖 빈도 표시
+  labs(x = "") +                                      # x축 이름
+  theme(text = element_text(family = "nanumgothic"))  # 폰트 적용
+
+# 3-2. 워드 클라우드
+# 검은고딕 폰트 불러오기
+font_add_google(name = "Black Han Sans",        # 구글 폰트에서 사용하고자 하는 폰트 이름 
+                family = "blackhansans")        # R에서 사용할 폰트 이름 -> 사용자 지정
+showtext_auto()
+
+ggplot(word_noun, aes(label = word, 
+                      size = n,                 # 빈도에 따라 단어의 크기를 다르게 표현
+                      col = n)) +               # 빈도에 따라 단어의 색깔을 다르게 표현
+ geom_text_wordcloud(seed = 1234,               # seed값 입력 -> 항상 같은 모양의 그래프를 출력
+                     family = "blackhansans") + # 폰트 적용
+ scale_radius(limits = c(3, NA),                # 최소, 최대 단어 빈도
+              range = c(3, 30)) +               # 최소, 최대 글자 크기
+ scale_color_gradient(low = "#66aaf2",          # 최소 빈도 색깔
+                      high = "#004EA1") +       # 최고 빈도 색깔
+ theme_minimal()                                # 배경 없는 테마 적용
+```
+
+----------------
+
+# **6. 특정 단어가 포함된 문장 추출**
+
+- Package `"stringr"`의 함수 `str_detect` : 특정 단어가 문장에 있으면 `TRUE`, 그렇지 않으면 `FALSE`를 반환하는 함수
+- 문재인 대통령 대선 출마 연설문을 이용하여 특정 단어가 포함된 문장을 살펴본다.
+
+```{r}
+# 1. 문장 기준으로 토큰화
+sentences_moon <- raw_moon %>%
+  str_squish() %>%                            # 연속된 공백 제거
+  as_tibble() %>%                             # Tibble 형태로 변환
+  unnest_tokens(input = value,                # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = sentence,            # 출력 변수명
+                token = "sentences")          # "sentences" : 문장 기준으로 토큰화
+
+sentences_moon
+```
+
+`Caution!` 문장으로 토큰화를 수행할 때는 마침표가 문장의 기준점이 되므로 특수 문자를 제거하지 않는다.
+
+-----------
+
+```{r}
+sentences_moon %>%
+  filter(str_detect(sentence, "국민"))        # "국민" 단어가 포함된 문장 추출
+```
+
+```{r}
+sentences_moon %>%
+  filter(str_detect(sentence, "일자리"))      # "일자리" 단어가 포함된 문장 추출
+```
+
+`Result!` 함수 `str_detect`와 Package `"dplyr"`의 함수 `filter`를 함께 사용하여 특정 단어가 포함된 문장을 추출할 수 있다.
+
+------------
+
+# **요약**
+
+```{r}
+# 전처리
+moon <- raw_moon %>% 
+  str_replace_all("[^가-힣]", " ") %>%        # 한글을 제외한 모든 문자를 공백으로 변경
+  str_squish() %>%                            # 연속된 공백 제거
+  as_tibble()                                 # Tibble 형태로 변환
+
+# 토큰화
+word_space <- moon %>% 
+  unnest_tokens(input = value,                # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,                # 출력 변수명
+                token = "words")              # "words" : 띄어쓰기 기준으로 토큰화
+
+# 단어 빈도 구하기
+word_space <- word_space %>% 
+  count(word, sort = T) %>%                   # 단어 빈도를 계산해 내림차순으로 정렬
+  filter(str_count(word) > 1)                 # 두 글자 이상의 단어만 추출 -> 한 글자로 된 단어 제거           
+
+# 자주 사용한 단어 추출
+top20 <- word_space %>%  
+  head(20)                                    # 상위 20개의 단어 추출
+
+top20
+
+# 명사 기준 토큰화
+word_noun <- moon %>%
+  unnest_tokens(input = value,                # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,                # 출력 변수명
+                token = extractNoun)          # 명사 기준으로 토큰화
+
+word_noun
+
+# 문장 기준 토큰화
+sentences_moon <- raw_moon %>% 
+  str_squish() %>%                            # 연속된 공백 제거
+  as_tibble()  %>%                            # Tibble 형태로 변환
+  unnest_tokens(input = value,                # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = sentence,            # 출력 변수명
+                token = "sentences")          # "sentences" : 문장 기준으로 토큰화
+
+sentences_moon
+
+# 특정 단어가 포함된 문장 추출
+sentences_moon %>%
+  filter(str_detect(sentence, "국민"))        # "국민" 단어가 포함된 문장 추출
+```
+

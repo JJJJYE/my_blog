@@ -1,0 +1,415 @@
+---
+title: "Unbalanced Target"
+description: |
+  Solution  for Unlanced Categorical Target
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 09-15-2020
+preview: preview.PNG
+categories: Machine Learning
+output:
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **1. 전 구간에서 랜덤하게 분할**
+
+## **1-1. R function "sample"**
+
+```{r, eval=FALSE}
+sample(x, size, replace = FALSE, prob = NULL)
+```
+
+- `x` : 하나 이상의 벡터로 추출될 대상
+- `size` : 추출 갯수
+- `replace` : 논리함수로 `TRUE`이면 반복추출 실행
+- `prob` : x의 각 요소가 추출되는 확률 
+
+
+## **1-2. 예제**
+```{r}
+# Partition (Traning Data : Test Data = 7:3)
+
+set.seed(100) 
+
+x <- rnorm(100,0,1)                        # Randomize 100 from normal probability variables with zero mean and one variance
+
+```
+
+```{r}
+set.seed(100)                              # Fixed seed for the same result
+
+
+ind <- sample(2, size=length(x), 
+              replace=T, prob=c(0.7, 0.3)) # The probability of number 1 being extracted is 0.7, and number 2 being extracted is 0.3 
+                                           
+
+
+trd <- x[ind==1]                           # Extract "x" for location 1 in the ind / Training Data
+
+
+trd
+```
+
+```{r}
+ted <- x[ind==2]                           # Extract "x" for location 2 in the ind출 / Test Data
+
+
+ted 
+
+```
+
+
+# **2. 각 구간 안에서 표본 추출**
+
+## **2-1. 예제**
+```{r}
+set.seed(100) 
+
+
+x <- rnorm(100,0,1)               
+
+
+set.seed(100)     
+
+
+ind <- c(sample(1:50,40), 
+         sample(51:length(x),35))  # 40 out of 1 to 50 and 35 out of 51 to 100  randomly selected
+
+
+```
+
+```{r}
+trd <- x[ind]                     
+
+
+trd
+```
+
+```{r}
+ted <- x[-ind]                    
+
+
+ted
+
+```
+
+
+# **3. Original Target 클래스의 비율에 맞게 분할**
+
+
+## **3-1. R function "createDataPartition"**
+```{r, eval=FALSE}
+createDataPartition(y, p = 0.5, list = TRUE, ...)
+```
+
+- `y` : Target
+- `p` : Training Data의 비율
+- `list` : 논리함수로 `TRUE`이면 list로 결과를 출력 
+
+
+## **3-2. 예제**
+
+> 사용될 예제 데이터는 "Universal Bank_Main"로 유니버셜 은행의 고객들에 대한 데이터(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이다. 데이터는 총 2500개이며, 변수의 갯수는 13개이다. 여기서 **Target**은 `Person.Loan`이다.
+
+
+<center><img src="./image/그림1.png" width="600" height="600"></center>
+
+
+<br />
+
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+<br />
+
+### **3-2-1. 데이터 불러오기**
+```{r}
+pacman::p_load("data.table", "dplyr",                               # Data processing
+               "caret")                                             # For createDataPartition
+
+
+UB   <- fread(paste(getwd(), "Universal Bank_Main.csv", sep="/"))   # Load Data
+
+
+glimpse(UB)	                                                        # Structure of data
+
+```
+
+
+### **3-2-2. Data 전처리**
+```{r}
+UB <- UB %>%
+  data.frame()%>%                                                    # Convert into Data Frame
+  mutate(Personal.Loan = ifelse(Personal.Loan==1,"yes","no") ) %>%   # If Personal Loan is 1, then "yes" otherwise "no"
+  mutate_at(vars(Personal.Loan), as.factor) %>%                      # Convert Personal Loan into Factor 
+  select(-1)                                                         # Remove first column
+
+ 
+```
+
+### **3-2-3. Original 클래스 비율**
+
+```{r}
+y   <- UB$Personal.Loan      # Target   
+t.y <- table(y)              # Frequency of Target of Original Data 
+t.y  
+
+p.y <- prop.table(t.y)       # Proportion of Target of Original Data 
+p.y  
+```
+
+
+### **3-2-4. Original Target 클래스의 비율에 맞게 분할**
+
+```{r}
+set.seed(100)
+train_set <- createDataPartition(y, p=0.8, list=T) # p=0.8 : Partition 80% into Tranning data
+
+trd       <- UB[train_set$Resample1,]              # Traning Data
+
+
+ted       <- UB[-train_set$Resample1,]             # Test Data
+
+t.trd.y <- table(trd$Personal.Loan)                # Frequency of Target of Training Data    
+
+
+t.trd.y 
+
+
+p.trd.y <- prop.table(t.trd.y)                     # Proportion of Target of Training Data 
+
+
+p.trd.y      
+
+detach(package:caret)
+
+```
+
+- Orininal Target 클래스의 비율과 Training Data의 Target 비율이 비슷한 것을 알 수 있다.
+
+<br />
+
+# **4. Unbalanced Target**
+
+## **4-1. upSample**
+
+### **R function "upSample"**
+
+```{r, eval=FALSE}
+upSample(x, y, ...)
+```
+
+- `x` : 예측변수
+- `y` : Target
+
+
+### **예제**
+
+```{r}
+pacman::p_load("caret")     # For upSample and downSample
+
+y  <- UB$Personal.Loan      # Target
+
+
+xs <- UB %>%                # Prediction Variable     
+  select(-Personal.Loan)
+
+UB.up <- upSample(xs,y)     # upSample : 적은 쪽의 데이터를 중복 추출하여 균형을 맞춤
+
+
+table(UB.up$Class)
+```
+
+```{r}
+# 불균형을 해결한 후 데이터 분할
+
+y <- UB.up$Class                                   # Target 
+
+
+train_set <- createDataPartition(y, p=0.8, list=T) # Original Target 비율에 맞게 Training Data를 80% 추출
+
+
+trd <- UB.up[train_set$Resample1,]                 # Training Data       
+
+
+ted <- UB.up[-train_set$Resample1,]                # Test Data
+
+
+t.trd.y <- table(trd$Class)                        
+t.trd.y
+
+p.trd.y <- prop.table(t.trd.y)
+p.trd.y
+```
+
+## **4-2. downSample**
+
+
+### **R function "downSample"**
+
+```{r, eval=FALSE}
+downSample(x, y, ...)
+```
+
+- `x` : 예측변수
+- `y` : Target
+
+### **예제**
+
+```{r}
+y  <- UB$Personal.Loan      # Target
+
+
+xs <- UB %>%                # 예측변수     
+  select(-Personal.Loan)
+
+
+UB.down <- downSample(xs,y) # downSample : 많은 쪽의 데이터를 적게 추출하여 균형을 맞춤
+table(UB.down$Class)
+
+```
+
+
+```{r}
+# 불균형을 해결한 후 데이터 분할
+
+y <- UB.down$Class                                 # Target
+
+
+train_set <- createDataPartition(y, p=0.8, list=T) # Original Target 비율에 맞게 Training Data를 80% 추출
+
+
+
+trd <- UB.down[train_set$Resample1,]               # Traning Data
+
+
+ted <- UB.down[-train_set$Resample1,]              # Test Data
+
+t.trd.y <- table(trd$Class)
+t.trd.y
+
+p.trd.y <- prop.table(t.trd.y)
+p.trd.y
+
+detach(package:caret)
+```
+
+## **4-3. SMOTE**
+
+### **R function "SMOTE"**
+
+```{r, eval=FALSE}
+SMOTE(form, data, k = 5, perc.over = 200, perc.under = 200, ...)
+```
+
+- `form` : 예측문제를 해결하는 공식
+- `data` : 원래 데이터셋을 포함하는 데이터 프레임
+- `k` : 고려할 최근접 이웃 수
+- `perc.over` : 비율이 낮은 클래스에서 얼마나 추가로 샘플링해야 하는지 결정하는 수
+- `perc.under` : 비율이 낮은 쪽의 데이터를 추가로 샘플링할 때 각 샘플에 대응해서 비율이 높은 쪽의 데이터를 얼마나 추가로 샘플링할지 결정하는 수
+
+
+### **예제**
+
+```{r}
+pacman::p_load("DMwR")                            # DMwR for SMOTE
+
+UB.SMOTE <- SMOTE(Personal.Loan~. , data=UB, k=5,
+                  perc.over =300, perc.under=200) # SMOTE는 Target의 형태가 문자형만
+
+table(UB.SMOTE$Personal.Loan) 
+```
+
+
+## **4-4. SMOTE + Tomek**
+
+
+### **R function "ubTomek"**
+
+```{r, eval=FALSE}
+ubTomek(x, y, ...)
+```
+
+- `x` : 예측변수
+- `y` : Target
+
+### **예제**
+
+```{r}
+pacman::p_load("unbalanced")                            # For ubTomek
+
+input.ST <- UB.SMOTE %>%
+  select(-Personal.Loan)                                # Target을 제외한 예측변수들
+
+
+output.ST <- ifelse(UB.SMOTE$Personal.Loan=="yes",1,0) 	# Tomek은 예측변수와 Target의 형태가 수치형!
+
+
+
+set.seed(100)                                           # Tomek은 seed값 지정해줘야 동일한 결과를 얻음	
+UB.ST <- ubTomek(input.ST, output.ST)    
+
+table(UB.ST$Y)
+
+detach(package:DMwR)
+detach(package:unbalanced)
+```
+
+
+## **4-5. SMOTE와 SMOTE + Tomek 비교**
+
+```{r}
+# SMOTE + Tomek 에 대한 데이터 프레임
+
+UB.ST1 <- UB.ST$X %>%
+  mutate(Personal.Loan=UB.ST$Y) %>%              # Personal.Loan 변수 추가
+  mutate_at(vars(Personal.Loan), as.factor) %>%  # Personal.Loan 변수를 범주형 변수로 변환
+  data.frame()                                   # data.frame 으로 변환
+
+```
+
+```{r}
+pacman::p_load("ggplot2", "gridExtra")
+
+## Original data
+p1 <- ggplot(UB, aes(x=Income, y=Age, color=Personal.Loan, shape=Personal.Loan))+
+  geom_point(show.legend = FALSE) + 
+  scale_shape_manual(values=c("N", "Y")) + 
+  theme(axis.title = element_text(face = "bold", size = 12)) +
+  labs(x="N 2244 : 256 Y", y= "Original Data") +
+  theme_bw() 
+  
+
+## SMOTE
+p2 <- ggplot(UB.SMOTE, aes(x=Income, y=Age, color=Personal.Loan, shape=Personal.Loan))+
+  geom_point(show.legend = FALSE) + 
+  scale_shape_manual(values=c("N", "Y")) +
+  theme(axis.title = element_text(face = "bold", size = 12)) +
+  labs(x="N 1536 : 1024 Y", y= "UB.SMOTE") +
+  theme_bw()
+
+
+## SMOTE + Tomek 
+p3 <- ggplot(UB.ST1, aes(x=Income, y=Age, color=Personal.Loan, shape=Personal.Loan))+
+  geom_point(show.legend = FALSE) + 
+  scale_shape_manual(values=c("N", "Y")) + 
+  theme(axis.title = element_text(face = "bold", size = 12)) + 
+  labs(x="N 1397 : 1024 Y", y= "UB.ST") +
+  theme_bw()
+
+grid.arrange(p1, p2, p3, ncol=3)        # p1, p2, p3 그래프를 한꺼번에 보기
+
+detach(package:ggplot2)
+detach(package:gridExtra)
+
+```
+
+

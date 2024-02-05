@@ -1,0 +1,131 @@
+---
+title: "Morphological Analysis : Korean"
+description: |
+  Morphological Analysis For Korean in Text Mining
+author:
+  - name: Yeongeun Jeon
+date: 05-17-2021
+categories: Text Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- 출처 : [R를 이용한 텍스트 마이닝](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9788946072190)
+
+
+
+```{r}
+pacman::p_load("KoNLP", "tm", "stringr")
+
+# useSystemDic() # 시스템 사전 설정
+# useSejongDic() # 세종 사전 설정
+useNIADic() # NIADic 사전 설정 (추천)
+
+
+mytext <- c("동해 물과 백두산이 마르고 닳도록, 하느님이 보우하사 우리나라 만세. ",
+             "남산 위에 저 소나무, 철갑을 두른 듯, 바람 서리 불변함은 우리 기상일세.",
+             "가을 하늘 공활한데 높고 구름 없이, 밝은 달은 우리 가슴 일편단심일세.",
+             "이 기상과 이 맘으로 충성을 다하여, 괴로우나 즐거우나 나라 사랑하세.")
+
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+mytext <- corpus[[4]]$content
+mytext
+```
+
+# **품사구분**
+
+> 패키지 "KoNLP"에는 품사를 9개와 22개로 구분할 수 있는 함수가 있다. 각각 구분되는 품사는 아래의 사진과 같다.
+
+<center><img src="konlp_tags.png" width="800" height="900"></center>  
+
+## **품사구분 9개**
+```{r, eval=FALSE}
+SimplePos09()
+```
+
+```{r}
+mypaper4.pos09 <- SimplePos09(mytext)
+mypaper4.pos09
+```
+
+##  **품사구분 22개**
+```{r, eval=FALSE}
+SimplePos22()
+```
+
+```{r}
+mypaper4.pos22 <- SimplePos22(mytext)
+mypaper4.pos22
+```
+
+### **4번째 Corpus에서 보통명사(NC)만 추출**
+```{r}
+mypaper4.pos22.pos <- c()
+mytextlength <- length(mypaper4.pos22)
+for (i in 1:mytextlength) {
+  mylocation <- str_locate_all(mypaper4.pos22[i], pattern ='/NC')                   # "/NC"의 위치 (품사구분을 하면 "단어/품사(대문자)"의 형태로 되어있음)
+  mypaper4.pos22.st <- str_sub(mypaper4.pos22[i], 1, mylocation[[1]][,"start"]-1)   # 처음부터 "/NC" 바로 앞까지의 모든 표현식 추출
+  mypaper4.pos22.pp <- str_replace_all(mypaper4.pos22.st,
+                                           "[[:graph:]]{1,}/[[:upper:]]{1,}[[:graph:]]{1}","")     # "문자/품사(대문자)+" 로 되어있는 표현식 없애기 (NC로 추출된 명사만 남기위해서=> 한번에 2개의 NC가 있을 수 있기 때문에)
+  mypaper4.pos22.pos[i] <- list(mypaper4.pos22.pp)
+  }
+
+mypaper4.pos22.pos
+```
+
+```{r}
+mypaper4.pos22.pos <- unlist(mypaper4.pos22.pos)
+mypaper4.pos22.pos <- mypaper4.pos22.pos[!is.na(mypaper4.pos22.pos)]             # NA가 아닌 경우만 추출
+mypaper4.pos22.pos
+```
+
+### **전체 Corpus에서 원하는 품사만 추출**
+```{r}
+# 품사를 추출하는 함수
+my.pos.func <- function(mytext, pos) {
+  
+      myobject <- SimplePos22(mytext)
+  new.myobject <- c()
+  mytextlength <- length(myobject)
+  
+    for (i in 1:mytextlength) {
+      mylocation <- str_locate_all(myobject[i], pattern =paste("/", pos, sep=""))            # "/pos"의 위치 (품사구분을 하면 "단어/품사(대문자)"의 형태로 되어있음)
+      myobject.pos22.st <- str_sub(myobject[i], 1, mylocation[[1]][,"start"]-1)              # 처음부터 "/pos" 바로 앞까지의 모든 표현식 추출
+      myobject.pos22.pp <- str_replace_all(myobject.pos22.st,
+                                            "[[:graph:]]{1,}/[[:upper:]]{1,}[[:graph:]]{1}","")     # "문자/품사(대문자)+" 로 되어있는 표현식 없애기 (한번에 2개 이상의 pos가 있을 수 있기 때문에)
+      new.myobject[i]   <- list(myobject.pos22.pp)
+    }
+  new.myobject <- unlist(new.myobject)
+  new.myobject <- new.myobject[!is.na(new.myobject)]
+  new.myobject
+}  
+
+
+sum(table(my.pos.func(corpus[[4]]$content, "NC")))
+
+sum(table(my.pos.func(corpus[[4]]$content, "PA|PV")))
+
+
+```
+
+```{r}
+size.noun <- rep(NA,length(corpus))
+for (j in 1:length(corpus)){
+  size.noun[j] <- sum(table(my.pos.func(corpus[[j]]$content, "NC")))   
+}
+
+size.noun  # 각 corpus에 대한 보통명사(NC) 갯수
+
+
+#최고빈도의, 최저빈도의 보통명사 등장수를 갖는 corpus
+size.noun <- data.frame(1:length(corpus),size.noun)
+colnames(size.noun) <- c('abstract.no','no.noun')
+size.noun[order(size.noun$no.noun),][c(1,length(corpus)),]
+
+```
+

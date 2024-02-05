@@ -1,0 +1,1318 @@
+---
+title: "Principal Component Analysis"
+description: |
+  Description for Principal Component Analysis
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-09-02
+categories: Data Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+- **참고**
+    - **R을 활용한 다변량 자료분석 방법론, 강현철 $\cdot$ 연규필 $\cdot$ 한상태 저**
+    - **Machine Learning with R, the tidyverse, and mlr, Hefin I. Rhys 저**
+
+----------
+
+> Principal Component Analysis의 장점
+ 
+- Principal Component Analysis에서 생성된 새 축은 Original 변수들 측면에서 직접 해석할 수 있다.
+- 새로운 데이터셋을 주축에 투영할 수 있다.
+    - 새로운 값을 주성분에 대입하여 수학적으로 차원 축소된 값을 얻을 수 있다.
+- Principal Component Analysis는 수학적 변환이므로 계산적인 부담이 적다.    
+
+</br>
+
+> Principal Component Analysis의 단점
+
+- 주성분은 선형결합식으로 이루어져 있으며, 비선형으로 차원 축소가 불가능하다.
+- 수치형 변수만 적용할 수 있다.
+- 주성분의 개수는 여러가지 지표를 이용하여 사용자가 판단해야 한다.
+ 
+------------
+
+# **Package Loading**
+
+```{r}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr", "psych", 
+               "ggplot2", "GGally",
+               "factoextra",
+               "ggbiplot")
+
+# pacman::p_load("devtools")
+# install_github("vqv/ggbiplot")
+# library(ggbiplot)
+```
+
+
+-----------------------
+
+# **예제 1**
+
+- 주성분분석을 수행하기 위해 사용되는 데이터는  [자유아카데미](http://www.freeaca.com/new/library/BoardFileList.aspx?page=1&sword=%eb%8b%a4%eb%b3%80%eb%9f%89&stype=title&area=2)에서 출판한 책 **R을 활용한 다변량 자료분석 방법론**의 데이터 파일 중 "satis.csv"이다.
+- 이 데이터는 어떤 제품에 대한 고객의 만족도를 조사하여 얻어진 데이터로 총 8개의 변수를 포함한다.
+    1. `ID` : 고객 아이디
+    2. `gender` : 고객 성별
+    3. `age` : 고객 나이
+    4. `x1` : 가격에 대한 만족도
+    5. `x2` : 성능에 대한 만족도
+    6. `x3` : 편리성에 대한 만족도
+    7. `x4` : 디자인에 대한 만족도
+    8. `x5` : 색상에 대한 만족도
+- 만족도는 5점 척도로 측정되어 있으며, "1 = 매우 만족하지 않는다.", "2 = 만족하지 않는다.", "3 = 보통이다.", "4 = 만족한다.", "5 = 매우 만족한다."를 의미한다.  
+
+---------------------
+
+## **1. 데이터 불러오기**
+
+```{r}
+satis <- read.csv("satis.csv")
+satis
+```
+  
+----------------------------
+
+## **2. 데이터 탐색**
+
+</br>
+
+### **2-1. 기술통계량**
+
+```{r}
+describe(satis[,c("x1", "x2", "x3", "x4", "x5")])
+```
+
+`Caution!` Package `"psych"`에서 제공하는 함수 `describe()`를 이용하여 기술통계량을 출력할 수 있다.  
+`Result!` 변수 `x1`의 표준편차는 다른 변수들에 비해 상대적으로 큰 반면, 변수 `x3`는 다른 변수들에 비해 상대적으로 표준편차가 작다.
+
+-----------------
+
+### **2-2. 상관행렬**
+
+```{r}
+cor(satis[,c("x1", "x2", "x3", "x4", "x5")])
+```
+
+`Result!` 상대적으로 표준편차가 큰 변수 `x1`는 다른 변수들과 상관관계가 강하며, 특히, 변수 `x3`와 강한 양의 상관성을 가지고 있다($r=0.758$). 그리고, 변수`x4`와 `x5`도 매우 강한 양의 상관성을 가지고 있다($r=0.939$). 
+
+----------------
+
+### **2-3. 산점도행렬**
+
+```{r}
+ggpairs(satis[,-1],
+        mapping = aes(col = gender), alpha = 0.8) +         # 변수 gender의 범주에 따라 색깔을 다르게 표현
+    scale_colour_manual(values = c("#00798c", "#d1495b")) + # 특정 색깔 지정
+  scale_fill_manual(values = c("#00798c", "#d1495b")) +     # 특정 색깔 지정
+  theme_bw()
+```
+
+-----------------
+
+## **3. 공분산행렬을 이용한 주성분분석**
+
+```{r}
+satis.prcomp <- prcomp(satis[,c("x1", "x2", "x3", "x4", "x5")])
+satis.prcomp
+```
+
+`Caution!` 주성분분석은 함수 `prcomp()`를 통해 수행할 수 있다. 자세한 옵션은 `?prcomp`를 통해 확인하거나 [여기](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/prcomp)를 참고한다.  
+`Result!` 함수 `prcomp()`는 5개의 결과를 리스트로 반환한다.  
+
+1. `sdev` : 데이터셋을 주성분에 투영했을 때의 표준편차인 주성분의 표준편차(= 공분산행렬의 고유값의 제곱근)
+    - 출력 결과의 "Standard deviations"와 동일
+2. `rotation` : 주축의 계수(= 공분산행렬의 단위 고유벡터)
+    - 출력 결과의 "Rotation"과 동일
+3. `center` : 변수의 평균
+4. `scale` : 표준편차로 나누어 주는 작업 진행 여부
+5. `x` : 주성분 점수
+
+----------------
+
+```{r}
+satis.prcomp$sdev        # 주성분의 표준편차
+satis.prcomp$sdev^2      # 주성분의 분산 = 주성분에 의해 설명되는 분산의 양 = 공분산행렬의 고유값
+```
+
+`Caution!` 주성분의 분산은 함수 `eigen(cov(satis[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 공분산행렬의 고유값과 동일하며, 공분산행렬의 대각성분 합이 주성분 분산의 합(공분산행렬의 고유값의 합)과 같음을 알 수 있다.
+
+----------------
+
+```{r}
+satis.prcomp$rotation    # 주축의 계수 
+```
+
+`Caution!` 주축의 계수는 함수 `eigen(cov(satis[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 공분산행렬의 단위 고유벡터와 동일하다.  
+`Result!` 첫 번째 주성분은 $Y_1=0.572C_{1}+0.397C_{2}+0.256C_{3}+0.462C_{4}+0.486C_5$이며, 두 번째 주성분은 $Y_2=0.292C_1+0.600C_2+0.223C_3-0.598C_4-0.383C_5$이다. 여기서 확률변수 $C_{i}$는 $X_i-\mu_i$이며, $\mu_i$는 $X_i$의 평균을 의미한다. 또한, 변수 `x1`-`x5`는 $X_1$-$X_5$로 표현한다.  
+주성분의 의미를 해석해보면, 첫 번째 주성분은 계수가 서로 비슷하므로 전반적인 만족도를 나타낸다고 할 수 있으며, 두 번째 주성분은 변수 `x1-x3`와 변수 `x4-x5`의 부호가 반대이므로 가격, 성능, 편리성 제품의 "내형적 요인"과 디자인, 색상 등 제품의 "외형적 요인"의 만족도 차이를 나타낸다고 할 수 있다.
+
+----------------
+
+```{r}
+# 요약
+summary(satis.prcomp)    
+```
+
+`Result!` 처음 2개의 고유값은 5.082(= $2.2543^2$), 2.368(= $1.5387^2$)로서 각각 전체 변동의 62.6%(= 5.082/8.122)와 29.2%(= 2.368/8.122)를 차지한다. 따라서, 처음 2개의 주성분에 의해 데이터 변동의 약 91.7%가 설명될 수 있음을 알 수 있다. 이는 2개의 주성분만으로 데이터 변동을 충분히 설명할 수 있음을 의미한다. 만약 처음 2개의 주성분을 새로운 변수로 고려할 경우, 이는 원래 다섯 개의 예측변수들이 가지고 있는 정보를 2차원으로 축소한다는 의미이다. 
+
+----------------------------------------
+
+```{r}
+# 변수 적재 Ver.1
+1:5 %>%                                              # 첫 번째 변수부터 다섯 번째 변수에 function을 적용
+  map_df(function(x) satis.prcomp$rotation[,x]*satis.prcomp$sdev[x]) 
+```
+
+`Caution!` 주성분의 변수 적재(Variable Loading)는 단위 고유벡터(= 주축의 계수)와 고유값의 제곱근(= 주성분의 표준편차)을 곱함으로써 계산될 수 있다. 변수 적재를 계산하기 위해 함수 `map_df()`를 이용한다.  
+`Result!` 변수 적재는 각 변수가 특정 주성분에 얼마나 기여하는지를 설명한다. 결과값의 부호는 양/음의 상관관계를 나타내며, 값의 절대값이 클수록 주성분과 변수는 강한 관계를 가지고 있다. 출력 결과는 주성분과 변수 사이의 공분산처럼 해석할 수 있다. 예를 들어, 변수 `x1`은 첫 번째 주성분과 양의 상관성(1.29)을 가지고 있으며, 변수 `x4`는 두 번째 주성분과 음의 상관성(-0.920)을 가지고 있다.
+
+```{r}
+# 변수 적재 Ver.2
+pcaDat <- get_pca(satis.prcomp)                      # 주성분 결과에서 변수에 대한 정보(좌표, 제곱 코사인, 기여) 추출
+round(pcaDat$coord,3)                                # 변수 적재
+```
+
+`Caution!` 변수 적재는 package `"factoextra"`에서 제공하는 함수 `get_pca()`를 이용하여 계산할 수 있다.
+
+--------------------------
+
+```{r}
+# 변수 적재 그래프
+fviz_pca_var(satis.prcomp)
+```
+
+`Caution!` 변수 적재 그래프는 package `"factoextra"`에서 제공하는 함수 `fviz_pca_var()`를 이용하여 만들 수 있다.  
+`Result!` 그래프의 x축과 y축은 각각 첫 번째 주성분과 두 번째 주성분에 대한 변수 적재값을 의미하며, 특정 주축을 기준으로 화살표의 길이가 길수록 해당 변수와 해당 주성분은 강한 상관성을 가진다.
+
+------------------
+
+```{r}
+# 주성분 점수
+satis.score <- satis.prcomp$x           
+satis.score
+```
+
+`Caution!` 주성분 점수는 각 case의 관측값을 주성분에 대입함으로써 얻을 수 있으며, 고차원의 원본 데이터셋 대신 차원이 축소된 데이터셋으로 유용하게 사용될 수 있다. 함수 `prcomp()`를 이용한 결과 `satis.prcomp`에는 주성분 점수가 포함되어 있다.  
+`Result!` 첫 번째 주성분과 두 번째 주성분에 의해 얻어지는 $i$번째 case의 주성분 점수는 다음의 식을 이용하여 얻을 수 있다.
+$$
+\begin{align}
+\begin{cases}
+y_{i1}=0.572c_{i1}+0.397c_{i2}+0.256c_{i3}+0.462c_{i4}+0.486c_{i5},\\
+y_{i2}=0.292c_{i1}+0.600c_{i2}+0.223c_{i3}-0.598c_{i4}-0.383c_{i5},
+\end{cases}
+\end{align}
+$$
+여기서 $c_{ij}=x_{ij}-\bar{x}_{j}$는 $i$번째 case의 $j$번째 변수 관찰값 $x_{ij}$에서 $j$번째 변수의 평균값 $\bar{x}_j$을 뺀 것을 의미한다.
+
+--------------------
+
+```{r}
+# 성별에 따른 주성분 점수 그래프 Ver.1
+plot(satis.score[,1:2],                              # 첫 번째와 두 번째 주성분 점수
+     xlim = c(-4, 4), ylim = c(-2, 2), main = "성별에 따른 주성분 점수")
+abline(v = 0, h = 0, lty = 2)
+text(satis.score[,1:2],  labels = satis$gender, pos = 4, col = "red")
+
+# 성별에 따른 주성분 점수 그래프 Ver.2
+satisPca <- satis %>%
+  mutate(PCA1 = satis.score[, 1], PCA2 = satis.score[, 2])
+
+ggplot(satisPca, aes(PCA1, PCA2, 
+                     col = gender)) +                # 변수 gender의 범주에 따라 색깔을 다르게 표현
+  geom_point() +
+  geom_hline(yintercept=0, linetype='dashed', color='black') + 
+  geom_vline(xintercept=0, linetype='dashed', color='black') + 
+  theme_bw()
+```
+
+`Result!` 그래프의 수직선을 중심으로 오른쪽에 위치하는 점들은 첫 번째 주성분 점수가 높다는 것을 의미하고 왼쪽에 위치하는 점들은 첫 번째 주성분 점수가 낮다는 것을 의미한다. 오른쪽에 위치하는 점 5개 중 4개가 남자이므로, 전반적으로 남자가 여자보다 첫 번째 주성분 점수가 높으며, 이는 남자들의 전반적인 만족도가 높다고 해석할 수 있다. 마찬가지로 수평선을 중심으로 위쪽에 위치하는 점들은 두 번째 주성분 점수가 높다는 것을 의미하고 아래쪽에 위치하는 점들은 두 번째 주성분 점수가 낮다는 것을 의미한다. 두 번째 주성분 점수가 높다는 것은 가격, 성능, 편리성 등 제품의 내형적 요인에 대해서는 만족도가 높으나 디자인, 색상 등 외형적 요인에 대해서는 만족도가 낮다고 해석할 수 있다.
+
+--------------------
+
+```{r}
+# 주성분 점수 예측
+predict(satis.prcomp, newdata = tail(satis[,c("x1", "x2", "x3", "x4", "x5")], 2))
+```
+
+`Caution!` 함수 `predict()`를 이용하여 새로운 case에 대한 주성분 점수를 예측할 수 있다. 여기서는 설명의 편의상 마지막 2개의 case를 새로운 자료로 취급하여 예측을 수행하였다.  
+
+--------------------
+
+```{r}
+# Biplot
+fviz_pca_biplot(satis.prcomp, label = "var")
+```
+
+`Caution!` 주성분 점수와 변수 적재를 하나의 그래프에 함께 표현한 것을 행렬도(Biplot)라고 한다. 위 Biplot에서는 주성분 점수를 점으로 표현하고, 변수 적재를 화살표로 표현한다. Biplot는 다음을 기준으로 해석할 수 있다.  
+1. 점은 각 case(= 데이터셋에서 하나의 행)에 대한 주성분 점수를 나타낸다.  
+2. 화살표는 변수 적재값을 의미하며, 정확한 변수 적재값은 알 수 없다.  
+3. 화살표의 길이는 상관성의 정도를 표현한다. 즉, 주축을 기준으로 화살표의 길이가 길수록 변수와 해당 주성분은 강한 상관성을 가진다.  
+4. 화살표와 주축이 평행에 가까울수록 해당 변수는 해당 주성분에만 큰 영향을 미친다.  
+5. 화살표들 간의 각도가 작을수록 해당 변수들은 강한 양의 상관관계를 나타내며, 180도는 강한 음의 상관관계를 나타낸다. 또한, 직각은 상관성이 없음을 의미한다.    
+Biplot을 통해서 군집성, 변수들의 상관구조 등을 시각적으로 파악할 수 있다.  
+`Result!` Biplot의 x축과 y축은 각각 첫 번째와 두 번째 주성분 점수를 의미한다. 변수 `x1`과 `x5`는 첫 번째 주축(x축, 수평 점선)을 기준으로 화살표의 길이가 길며 이는 두 변수가 첫 번째 주성분과 강한 상관성을 가진다고 할 수 있다. 또한, 변수 `x1`, `x2`, `x3`의 화살표들 간의 각도가 작기 때문에(즉, 서로 가까이 위치해있기 때문에) 강한 양의 상관관계를 가지며, 변수 `x4`와 `x5` 또한 강한 양의 상관관계를 가진다.
+
+```{r}
+# ggbiplot을 이용한 Biplot
+ggbiplot(satis.prcomp,                      # 함수 prcomp에 의한 객체
+         obs.scale = 1,                     # 관찰값에 적용할 scale
+         var.scale = 1,                     # 변수에 적용할 scale
+         labels = satis$ID,                 # 점에 대한 label
+         circle = TRUE) +
+  theme_bw()
+```
+
+`Caution!` Package `"ggbiplot"`에서 제공하는 함수 `ggbiplot()`를 이용하여 Biplot을 만들 수 있으며, 함수에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55/topics/ggbiplot)를 참고한다.
+
+--------------------------
+
+```{r}
+# 스크리 그래프 Ver.1 (y축 : 고유값)
+par(mfrow = c(1, 2))
+screeplot(satis.prcomp, type = "b", main = "")  # 막대 그래프
+screeplot(satis.prcomp, type = "l", main = "")  # 선 그래프
+
+# 스크리 그래프 Ver.2
+fviz_screeplot(satis.prcomp, 
+               addlabels = TRUE,                # 막대 높이 표시 여부
+               # geom = "line",                 # 그래프 유형(bar / line)
+               choice = "eigenvalue",           # y축 (variance / eigenvalue)
+               linecolor = "#FC4E07",           # 선 색깔
+               barcolor = "#00AFBB",            # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")             # 막대의 색깔
+fviz_screeplot(satis.prcomp, 
+               addlabels = TRUE,                # 막대 높이 표시 여부
+               choice = "variance",             # y축(variance / eigenvalue)
+               linecolor = "#FC4E07",           # 선 색깔
+               barcolor = "#00AFBB",            # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")             # 막대의 색깔
+```
+
+`Result!` 스크리 그래프를 보면 첫 번째 주성분과 두 번째 주성분의 분산(고유값)이 크며 가파른 경사를 형성한다. 그러므로, 2개의 주성분 개수를 고려할 수 있다.
+
+--------------------------
+
+## **4. 상관행렬을 이용한 주성분분석**
+
+```{r}
+satis.cor.prcomp <- prcomp(satis[,c("x1", "x2", "x3", "x4", "x5")], center = TRUE, scale = TRUE) 
+satis.cor.prcomp
+```
+
+`Caution!` 상관행렬에 기초하여 주성분분석을 수행한다는 것은 표준화된 변수를 이용하여 주성분분석을 수행한다는 것을 의미한다. 함수 `prcomp()`의 옵션  `center = TRUE`와 `scale = TRUE`를 지정하여 변수를 표준화한 후, 상관행렬에 기초한 주성분분석을 수행할 수 있다.  
+`Result!` 상관행렬을 이용한 주성분분석 결과는 위에서 공분산행렬에 기초하여 수행한 주성분분석 결과와는 다른 것을 확인할 수 있다.
+
+--------------------------
+
+```{r}
+satis.cor.prcomp$sdev        # 주성분의 표준편차
+satis.cor.prcomp$sdev^2      # 주성분의 분산 = 주성분에 의해 설명되는 분산의 양 = 상관행렬의 고유값
+```
+
+`Caution!` 주성분의 분산은 함수 `eigen(cor(satis[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 상관행렬의 고유값과 동일하며, 상관행렬의 대각성분 합이 주성분 분산의 합(상관행렬의 고유값의 합)인 변수 개수 "5"와 같음을 알 수 있다.
+
+----------------------------
+
+```{r}
+satis.cor.prcomp$rotation    # 주축의 계수
+```
+
+`Caution!` 주축의 계수는 함수 `eigen(cor(satis[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 상관행렬의 단위 고유벡터와 동일하다.  
+`Result!` 첫 번째 주성분은 $Y_1=0.511Z_{1}+0.407Z_{2}+0.465Z_{3}+0.380Z_{4}+0.462Z_{5}$이며, 두 번째 주성분은 $Y_2=0.171Z_{1}+0.500Z_{2}+0.344Z_{3}-0.621Z_{4}-0.466Z_{5}$이 된다. 여기서 확률변수 $Z_{i}$는 $(X_i-\mu_i)/\sigma_{i}$이며, $\mu_i$와 $\sigma_{i}$는 각각 $X_i$의 평균과 표준편차를 의미한다. 또한, 변수 `x1`-`x5`는 $X_1$-$X_5$로 표현한다.  
+주성분의 의미를 해석해보면, 첫 번째 주성분은 계수가 서로 비슷하므로 전반적인 만족도를 나타낸다고 할 수 있으며, 두 번째 주성분은 변수 `x1-x3`와 변수 `x4-x5`의 부호가 반대이므로 가격, 성능, 편리성 제품의 "내형적 요인"과 디자인, 색상 등 제품의 "외형적 요인"의 만족도 차이를 나타낸다고 할 수 있다.
+
+----------------------------
+
+```{r}
+# 요약
+summary(satis.cor.prcomp)    
+```
+
+`Result!` 처음 2개의 고유값은 3.108(= $1.7628^2$), 1.399(= $1.1830^2$)로서 각각 전체 변동의 62.2%(= 3.108/5)와 28.0%(= 1.399/5)를 차지한다. 따라서, 처음 2개의 주성분에 의해 데이터 변동의 약 90.1%가 설명될 수 있음을 알 수 있다. 이는 2개의 주성분만으로 데이터 변동을 충분히 설명할 수 있음을 의미한다. 만약 처음 2개의 주성분을 새로운 변수로 고려할 경우, 이는 원래 다섯 개의 예측변수들이 가지고 있는 정보를 2차원으로 축소한다는 의미이다. 
+
+----------------------------------------
+
+```{r}
+# 변수 적재 Ver.1
+1:5 %>%                                              # 첫 번째 변수부터 다섯 번째 변수에 function을 적용
+  map_df(function(x) satis.cor.prcomp$rotation[,x]*satis.cor.prcomp$sdev[x]) 
+```
+
+`Caution!` 주성분의 변수 적재(Variable Loading)는 단위 고유벡터(= 주축의 계수)와 고유값의 제곱근(= 주성분의 표준편차)을 곱함으로써 계산될 수 있다. 변수 적재를 계산하기 위해 함수 `map_df()`를 이용한다.  
+`Result!` 변수 적재는 각 변수가 특정 주성분에 얼마나 기여하는지를 설명한다. 결과값의 부호는 양/음의 상관관계를 나타내며, 값의 절대값이 클수록 주성분과 변수는 강한 관계를 가지고 있다. 출력 결과는 피어슨 상관계수처럼 해석할 수 있다. 예를 들어, 변수 `x1`은 첫 번째 주성분과 강한 양의 상관성($r=0.900$)을 가지며, 변수 `x4`는 두 번째 주성분과 강한 음의 상관성($r=-0.734$)을 가진다.
+
+```{r}
+# 변수 적재 Ver.2
+pcaDat <- get_pca(satis.cor.prcomp)                  # 주성분 결과에서 변수에 대한 정보(좌표, 제곱 코사인, 기여) 추출
+round(pcaDat$coord,3)                                # 변수 적재
+```
+
+`Caution!` 변수 적재는 package `"factoextra"`에서 제공하는 함수 `get_pca()`를 이용하여 계산할 수 있다.
+
+--------------------------
+
+```{r}
+# 변수 적재 그래프
+fviz_pca_var(satis.cor.prcomp)
+```
+
+`Result!` 그래프의 x축과 y축은 각각 첫 번째 주성분과 두 번째 주성분에 대한 변수 적재값을 의미하며, 특정 주축을 기준으로 화살표의 길이가 길수록 해당 변수와 해당 주성분은 강한 상관성을 가진다.
+
+------------------
+
+```{r}
+# 주성분 점수
+satis.cor.score <- satis.cor.prcomp$x           
+satis.cor.score
+```
+
+`Caution!` 주성분 점수는 각 case의 관측값을 주성분에 대입함으로써 얻을 수 있으며, 고차원의 원본 데이터셋 대신 차원이 축소된 데이터셋으로 유용하게 사용될 수 있다. 함수 `prcomp()`를 이용한 결과 `satis.cor.prcomp`에는 주성분 점수가 포함되어 있다.  
+`Result!` 첫 번째 주성분과 두 번째 주성분에 의해 얻어지는 $i$번째 case의 주성분 점수는 다음의 식을 이용하여 얻을 수 있다.
+$$
+\begin{align}
+\begin{cases}
+y_{i1}=0.511z_{i1}+0.407z_{i2}+0.465z_{i3}+0.380z_{i4}+0.462z_{i5},\\
+y_{i2}=0.171z_{i1}+0.500z_{i2}+0.344z_{i3}-0.621z_{i4}-0.466z_{i5},
+\end{cases}
+\end{align}
+$$
+여기서 $z_{ij}=(x_{ij}-\bar{x}_{j})/s_{j}$는 $i$번째 case의 $j$번째 변수 관찰값 $x_{ij}$에서 $j$번째 변수의 평균값 $\bar{x}_j$을 뺀 후 $j$번째 변수의 표준편차 값 $s_j$로 나눈 것을 의미한다.
+
+--------------------
+
+```{r}
+# 성별에 따른 주성분 점수 그래프 Ver.1
+plot(satis.cor.score[,1:2],                          # 첫 번째와 두 번째 주성분 점수
+     xlim = c(-4, 4), ylim = c(-2, 2), main = "성별에 따른 주성분 점수")
+abline(v = 0, h = 0, lty = 2)
+text(satis.cor.score[,1:2],  labels = satis$gender, pos = 4, col = "red")
+
+# 성별에 따른 주성분 점수 그래프 Ver.2
+satisPca <- satis %>%
+  mutate(PCA1 = satis.cor.score[, 1], PCA2 = satis.cor.score[, 2])
+
+ggplot(satisPca, aes(PCA1, PCA2,
+                     col = gender)) +                # 변수 gender의 범주에 따라 색깔을 다르게 표현
+  geom_point() +
+  geom_hline(yintercept=0, linetype='dashed', color='black') + 
+  geom_vline(xintercept=0, linetype='dashed', color='black') + 
+  theme_bw()
+```
+
+`Result!` 그래프의 수직선을 중심으로 오른쪽에 위치하는 점들은 첫 번째 주성분 점수가 높다는 것을 의미하며, 왼쪽에 위치하는 점들은 첫 번째 주성분 점수가 낮다는 것을 의미한다. 오른쪽에 위치하는 점 5개 중 4개가 남자이므로, 이는 남자들의 전반적인 만족도가 높다고 해석할 수 있다. 마찬가지로 수평선을 중심으로 위쪽에 위치하는 점들은 두 번째 주성분 점수가 높다는 것을 의미하며, 아래쪽에 위치하는 점들은 두 번째 주성분 점수가 낮다는 것을 의미한다. 두 번째 주성분 점수가 높다는 것은 가격, 성능, 편리성 등 제품의 내형적 요인에 대해서는 만족도가 높으나 디자인, 색상 등 외형적 요인에 대해서는 만족도가 낮다고 해석할 수 있다.
+
+--------------------
+
+```{r}
+# 주성분 점수 예측
+predict(satis.cor.prcomp, newdata = tail(satis[,c("x1", "x2", "x3", "x4", "x5")], 2))
+```
+
+`Caution!` 함수 `predict()`를 이용하여 새로운 case에 대한 주성분 점수를 예측할 수 있다. 여기서는 설명의 편의상 마지막 2개의 case를 새로운 자료로 취급하여 예측을 수행하였다.  
+
+--------------------
+
+```{r}
+# Biplot
+fviz_pca_biplot(satis.cor.prcomp, label = "var")
+```
+
+`Caution!` 주성분 점수와 변수 적재를 하나의 그래프에 함께 표현한 것을 행렬도(Biplot)라고 한다. 위 Biplot에서는 주성분 점수를 점으로 표현하고, 변수 적재를 화살표로 표현한다. Biplot는 다음을 기준으로 해석할 수 있다.  
+1. 점은 각 case(데이터셋에서 하나의 행)에 대한 주성분 점수를 나타낸다.  
+2. 화살표는 변수 적재값을 의미하며, 정확한 변수 적재값은 알 수 없다.  
+3. 화살표의 길이는 상관성의 정도를 표현한다. 즉, 주축을 기준으로 화살표의 길이가 길수록 변수와 해당 주성분은 강한 상관성을 가진다.  
+4. 화살표와 주축이 평행에 가까울수록 해당 변수는 해당 주성분에만 큰 영향을 미친다.  
+5. 화살표들 간의 각도가 작을수록 해당 변수들은 강한 양의 상관관계를 나타내며, 180도는 강한 음의 상관관계를 나타낸다. 또한, 직각은 상관성이 없음을 의미한다.    
+Biplot을 통해서 군집성, 변수들의 상관구조 등을 시각적으로 파악할 수 있다.  
+`Result!` Biplot의 x축과 y축은 각각 첫 번째와 두 번째 주성분 점수를 의미한다. 변수 `x1`과 `x5`는 첫 번째 주축(x축, 수평 점선)을 기준으로 화살표의 길이가 길며 이는 두 변수가 첫 번째 주성분과 강한 상관성을 가진다고 할 수 있다. 또한, 변수 `x1`, `x2`, `x3`의 화살표들 간의 각도가 작기 때문에(즉, 서로 가까이 위치해있기 때문에) 강한 양의 상관관계를 가지며, 변수 `x4`와 `x5` 또한 강한 양의 상관관계를 가진다.
+
+
+```{r}
+# ggbiplot을 이용한 Biplot
+ggbiplot(satis.cor.prcomp,                  # 함수 prcomp에 의한 객체
+         obs.scale = 1,                     # 관찰값에 적용할 스케일
+         var.scale = 1,                     # 변수에 적용할 스케일
+         labels = satis$ID,                 # 점에 대한 라벨
+         circle = TRUE) +
+  theme_bw()
+```
+
+`Caution!` Package `"ggbiplot"`에서 제공하는 함수 `ggbiplot()`를 이용하여 Biplot을 만들 수 있으며, 함수에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55/topics/ggbiplot)를 참고한다.
+
+
+--------------------------
+
+```{r}
+# 스크리 그래프 Ver.1 (y축 : 고유값)
+par(mfrow = c(1, 2))
+screeplot(satis.cor.prcomp, type = "b", main = "")   # 막대그래프
+screeplot(satis.cor.prcomp, type = "l", main = "")   # 선 그래프
+
+# 스크리 그래프 Ver.2
+fviz_screeplot(satis.cor.prcomp, 
+               addlabels = TRUE,                     # 막대 높이 표시 여부
+               # geom = "line",                      # 그래프 유형(bar / line)
+               choice = "eigenvalue",                # y축 (variance / eigenvalue)
+               linecolor = "#FC4E07",                # 선 색깔
+               barcolor = "#00AFBB",                 # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                  # 막대의 색깔
+fviz_screeplot(satis.cor.prcomp, 
+               addlabels = TRUE,                     # 막대 높이 표시 여부
+               choice = "variance",                  # y축(variance / eigenvalue)
+               linecolor = "#FC4E07",                # 선 색깔
+               barcolor = "#00AFBB",                 # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                  # 막대의 색깔
+```
+
+`Result!` 스크리 그래프를 보면, 첫 번째 주성분과 두 번째 주성분의 분산(고유값)이 크며 가파른 경사를 형성한다. 그러므로, 2개의 주성분 개수를 고려할 수 있다.
+
+----------------------------------------
+
+# **예제 2**
+
+- 주성분분석을 수행하기 위해 사용되는 데이터는 [자유아카데미](http://www.freeaca.com/new/library/BoardFileList.aspx?page=1&sword=%eb%8b%a4%eb%b3%80%eb%9f%89&stype=title&area=2)에서 출판한 책 **R을 활용한 다변량 자료분석 방법론**의 데이터 파일 중 "student.csv"이다.
+- 이 데이터는 10명의 학생에 대한 5과목 점수 데이터로 총 6개의 변수를 포함한다.
+    1. `ID` : 학생 ID
+    2. `x1` : 국어 점수
+    3. `x2` : 영어 점수
+    4. `x3` : 제2외국어 점수
+    5. `x4` : 수학 점수
+    6. `x5` : 과학 점수
+
+---------------------
+
+## **1. 데이터 불러오기**
+    
+```{r}
+student <- read.csv("student.csv")
+student
+```
+
+----------------------------
+
+## **2. 데이터 탐색**
+
+</br>
+
+### **2-1. 기술통계량**
+
+```{r}
+describe(student[,c("x1", "x2", "x3", "x4", "x5")])
+```
+
+`Result!` 변수 `x1`의 표준편차는 다른 변수들에 비해 상대적으로 큰 반면, 변수 `x3`는 다른 변수들에 비해 상대적으로 표준편차가 작다.
+
+-----------------
+
+### **2-2. 상관행렬**
+
+```{r}
+cor(student[,c("x1", "x2", "x3", "x4", "x5")])
+```
+
+`Result!` 상대적으로 표준편차가 큰 변수 `x1`은 상대적으로 다른 변수들과 0.5 이상의 강한 상관성을 보인다. 그리고, 변수 `x4`와 `x5` 사이에는 매우 강한 양의 상관성을 가지고 있다($r=0.973$). 
+
+-----------------
+
+### **2-3. 산점도행렬**
+
+```{r}
+ggpairs(student[,-1]) +
+  theme_bw()
+```
+
+-----------------
+
+## **3. 공분산행렬을 이용한 주성분분석**
+
+```{r}
+student.prcomp <- prcomp(student[,c("x1", "x2", "x3", "x4", "x5")]) 
+student.prcomp
+```
+
+`Caution!` 주성분분석은 함수 `prcomp()`를 통해 수행할 수 있다. 자세한 옵션은 `?prcomp`를 통해 확인하거나 [여기](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/prcomp)를 참고한다.  
+`Result!` 함수 `prcomp()`는 5개의 결과를 리스트로 반환한다.  
+
+1. `sdev` : 데이터셋을 주성분에 투영했을 때의 표준편차인 주성분의 표준편차(= 공분산행렬의 고유값의 제곱근)
+    - 출력 결과의 "Standard deviations"와 동일
+2. `rotation` : 주축의 계수(= 공분산행렬의 단위 고유벡터)
+    - 출력 결과의 "Rotation"과 동일
+3. `center` : 변수의 평균
+4. `scale` : 표준편차로 나누어 주는 작업 진행 여부
+5. `x` : 주성분 점수
+
+----------------
+
+```{r}
+student.prcomp$sdev        # 주성분의 표준편차
+student.prcomp$sdev^2      # 주성분의 분산 = 주성분에 의해 설명되는 분산의 양 = 공분산행렬의 고유값
+```
+
+`Caution!` 주성분의 분산은 함수 `eigen(cov(student[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 공분산행렬의 고유값과 동일하며, 공분산행렬의 대각성분 합이 주성분 분산의 합(공분산행렬의 고유값의 합)과 같음을 알 수 있다.
+
+----------------
+
+```{r}
+student.prcomp$rotation   # 주축의 계수 
+```
+
+`Caution!` 주축의 계수는 함수 `eigen(cov(student[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 공분산행렬의 단위 고유벡터와 동일하다.  
+`Result!` 첫 번째 주성분은 $Y_1=0.616C_{1}+0.315C_{2}+0.153C_{3}+0.521C_{4}+0.477C_{5}$이며, 두 번째 주성분은 $Y_2=0.418C_1+0.540C_2+0.287C_3-0.544C_4-0.395C_{5}$이 된다. 여기서 확률변수 $C_{i}$는 $X_i-\mu_i$이며, $\mu_i$는 $X_i$의 평균을 의미한다. 또한, 변수 `x1`-`x5`는 $X_1$-$X_5$로 표현한다.  
+주성분의 의미를 해석해보면, 첫 번째 주성분은 계수가 서로 비슷하므로 전반적인 평점을 나타낸다고 할 수 있으며, 두 번째 주성분은 변수 `x1-x3`와 변수 `x4-x5`의 부호가 반대이므로 국어, 영어, 제2외국어의 "인문계열"과 수학, 과학의 "이과계열"의 점수 차이를 나타낸다고 할 수 있다.
+
+----------------
+
+```{r}
+# 요약
+summary(student.prcomp)    
+```
+
+`Result!` 처음 2개의 고유값은 2139.972(= $46.2598^2$), 772.956(= $27.8021^2$)로서 각각 전체 변동의 69.7%(= 2139.972/3071.411)와 25.2%(= 772.956/3071.411)를 차지한다. 따라서, 처음 2개의 주성분에 의해 데이터 변동의 약 94.8%가 설명될 수 있음을 알 수 있다. 이는 2개의 주성분만으로 데이터 변동을 충분히 설명할 수 있음을 의미한다. 만약 처음 2개의 주성분을 새로운 변수로 고려할 경우, 이는 원래 다섯 개의 예측변수들이 가지고 있는 정보를 2차원으로 축소한다는 의미이다. 
+
+------------------
+
+```{r}
+# 변수 적재 Ver.1
+1:5 %>%                                                # 첫 번째 변수부터 다섯 번째 변수에 function을 적용
+  map_df(function(x) student.prcomp$rotation[,x]*student.prcomp$sdev[x]) 
+```
+
+`Caution!` 주성분의 변수 적재(Variable Loading)는 단위 고유벡터(= 주축의 계수)와 고유값의 제곱근(= 주성분의 표준편차)을 곱함으로써 계산될 수 있다. 변수 적재를 계산하기 위해 함수 `map_df()`를 이용한다.  
+`Result!` 변수 적재는 각 변수가 특정 주성분에 얼마나 기여하는지를 설명한다. 결과값의 부호는 양/음의 상관관계를 나타내며, 값의 절대값이 클수록 주성분과 변수는 강한 관계를 가지고 있다. 출력 결과는 주성분과 변수 사이의 공분산처럼 해석할 수 있다. 예를 들어, 변수 `x1`은 첫 번째 주성분과 양의 상관성(28.5)을 가지고 있으며, 변수 `x4`는 두 번째 주성분과 음의 상관성(-15.1)을 가지고 있다.
+
+
+```{r}
+# 변수 적재 Ver.2
+pcaDat <- get_pca(student.prcomp)                      # 주성분 결과에서 변수에 대한 정보(좌표, 제곱 코사인, 기여) 추출
+round(pcaDat$coord,3)                                  # 변수 적재
+```
+
+`Caution!` 변수 적재는 package `"factoextra"`에서 제공하는 함수 `get_pca()`를 이용하여 계산할 수 있다.
+
+--------------------------
+
+```{r}
+# 변수 적재 그래프
+fviz_pca_var(student.prcomp)
+```
+
+`Result!` 그래프의 x축과 y축은 각각 첫 번째 주성분과 두 번째 주성분에 대한 변수 적재값을 의미하며, 특정 주축을 기준으로 화살표의 길이가 길수록 해당 변수와 해당 주성분은 강한 상관성을 가진다.
+
+------------------
+
+```{r}
+# 주성분 점수
+student.score <- student.prcomp$x           
+student.score
+```
+
+`Caution!` 주성분 점수는 각 case의 관측값을 주성분에 대입함으로써 얻을 수 있으며, 고차원의 원본 데이터셋 대신 차원이 축소된 데이터셋으로 유용하게 사용될 수 있다. 함수 `prcomp()`를 이용한 결과 `student.prcomp`에는 주성분 점수가 포함되어 있다.  
+`Result!` 첫 번째 주성분과 두 번째 주성분에 의해 얻어지는 $i$번째 case의 주성분 점수는 다음의 식을 이용하여 얻을 수 있다.
+$$
+\begin{align}
+\begin{cases}
+y_{i1}=0.616c_{i1}+0.315c_{i2}+0.153c_{i3}+0.521c_{i4}+0.477c_{i5},\\
+y_{i2}=0.418c_{i1}+0.540c_{i2}+0.287c_{i3}-0.544c_{i4}-0.395c_{i5},
+\end{cases}
+\end{align}
+$$
+여기서 $c_{ij}=x_{ij}-\bar{x}_{j}$는 $i$번째 case의 $j$번째 변수 관찰값 $x_{ij}$에서 $j$번째 변수의 평균값 $\bar{x}_j$을 뺀 것을 의미한다.
+
+------------------
+
+```{r}
+# 주성분 점수 그래프 Ver.1
+plot(student.score[,1:2],                              # 첫 번째와 두 번째 주성분 점수
+     main = "Case별 주성분 점수")
+abline(v = 0, h = 0, lty = 2)
+text(student.score[,1:2],  labels = student$ID, pos = 4, col = "red")
+
+# 주성분 점수 그래프 Ver.2
+studentPca <- student %>%
+  mutate(PCA1 = student.score[, 1], PCA2 = student.score[, 2])
+
+ggplot(studentPca, aes(PCA1, PCA2)) +
+  geom_point() +
+  geom_hline(yintercept=0, linetype='dashed', color='black') + 
+  geom_vline(xintercept=0, linetype='dashed', color='black') + 
+  geom_text(aes(label = ID), hjust=0, vjust=0) +
+  theme_bw()
+```
+
+`Result!` 그래프의 수직선을 중심으로 오른쪽에 위치하는 점들은 첫 번째 주성분 점수가 높다는 것을 의미하고 왼쪽에 위치하는 점들은 첫 번째 주성분 점수가 낮다는 것을 의미한다. 그래프를 살펴보면, 그래프의 오른쪽에 위치하는 "10", "9", "7"번 case는 첫 번째 주성분 값이 높으며, 이는 "10", "9", "7"번 case의 전반적인 평점이 높다고 해석할 수 있다. 반면, 왼쪽에 위치하는 "1", "2", "6"번 case는 전반적인 평점이 낮다고 해석할 수 있다. 마찬가지로 수평선을 중심으로 위쪽에 위치하는 점들은 두 번째 주성분 점수가 높다는 것을 의미하고 아래쪽에 위치하는 점들은 두 번째 주성분 점수가 낮다는 것을 의미한다. 두 번째 주성분 점수가 높다는 것은 국어, 영어, 제2외국어 등 인문계열 과목에 대해서는 점수가 높으나 수학, 과학 등 이과계열 과목에 대해서는 점수가 낮다고 해석할 수 있다.
+
+------------------
+
+```{r}
+# 주성분 점수 예측
+predict(student.prcomp, newdata = tail(student[,c("x1", "x2", "x3", "x4", "x5")], 2))
+```
+
+`Caution!` 함수 `predict()`를 이용하여 새로운 case에 대한 주성분 점수를 예측할 수 있다. 여기서는 설명의 편의상 마지막 2개의 case를 새로운 자료로 취급하여 예측을 수행하였다.  
+
+--------------------
+
+```{r}
+# Biplot
+fviz_pca_biplot(student.prcomp, label = "var")
+```
+
+`Caution!` 주성분 점수와 변수 적재를 하나의 그래프에 함께 표현한 것을 행렬도(Biplot)라고 한다. 위 Biplot에서는 주성분 점수를 점으로 표현하고, 변수 적재를 화살표로 표현한다. Biplot는 다음을 기준으로 해석할 수 있다.  
+1. 점은 각 case(데이터셋에서 하나의 행)에 대한 주성분 점수를 나타낸다.  
+2. 화살표는 변수 적재값을 의미하며, 정확한 변수 적재값은 알 수 없다.  
+3. 화살표의 길이는 상관성의 정도를 표현한다. 즉, 주축을 기준으로 화살표의 길이가 길수록 변수와 해당 주성분은 강한 상관성을 가진다.  
+4. 화살표와 주축이 평행에 가까울수록 해당 변수는 해당 주성분에만 큰 영향을 미친다.  
+5. 화살표들 간의 각도가 작을수록 해당 변수들은 강한 양의 상관관계를 나타내며, 180도는 강한 음의 상관관계를 나타낸다. 또한, 직각은 상관성이 없음을 의미한다.    
+Biplot을 통해서 군집성, 변수들의 상관구조 등을 시각적으로 파악할 수 있다.  
+`Result!` Biplot의 x축과 y축은 각각 첫 번째와 두 번째 주성분 점수를 의미한다. 변수 `x1`과 `x4`는 첫 번째 주축(x축, 수평 점선)을 기준으로 화살표의 길이가 길며, 이는 두 변수가 첫 번째 주성분과 강한 상관성을 가진다고 할 수 있다. 또한, 변수 `x1`, `x2`, `x3`의 화살표들 간의 각도가 작기 때문에(즉, 서로 가까이 위치해있기 때문에) 강한 양의 상관관계를 가지며, 변수 `x4`와 `x5` 또한 강한 양의 상관관계를 가진다.
+
+```{r}
+# ggbiplot을 이용한 Biplot
+ggbiplot(student.prcomp,                               # 함수 prcomp에 의한 객체
+         obs.scale = 1,                                # 관찰값에 적용할 스케일
+         var.scale = 1,                                # 변수에 적용할 스케일
+         labels = student$ID,                          # 점에 대한 라벨
+         circle = TRUE) +
+  theme_bw()
+```
+
+`Caution!` Package `"ggbiplot"`에서 제공하는 함수 `ggbiplot()`를 이용하여 Biplot을 만들 수 있으며, 함수에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55/topics/ggbiplot)를 참고한다.
+
+
+--------------------------
+
+```{r}
+# 스크리 그래프 Ver.1 (y축 : 고유값)
+par(mfrow = c(1, 2))
+screeplot(student.prcomp, type = "b", main = "")        # 막대그래프
+screeplot(student.prcomp, type = "l", main = "")        # 선 그래프
+
+# 스크리 그래프 Ver.2
+fviz_screeplot(student.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               # geom = "line",                        # 그래프 유형(bar / line)
+               choice = "eigenvalue",                  # y축 (variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+fviz_screeplot(student.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               choice = "variance",                    # y축(variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+```
+
+`Result!` 스크리 그래프를 보면 첫 번째 주성분과 두 번째 주성분의 분산(고유값)이 크며 가파른 경사를 형성한다. 그러므로, 2개의 주성분 개수를 고려할 수 있다.
+
+--------------------------
+
+## **4. 상관행렬을 이용한 주성분분석**
+
+```{r}
+student.cor.prcomp <- prcomp(student[,c("x1", "x2", "x3", "x4", "x5")], center = TRUE, scale = TRUE) 
+student.cor.prcomp
+```
+
+`Caution!` 상관행렬에 기초하여 주성분분석을 수행한다는 것은 표준화된 변수를 이용하여 주성분분석을 수행한다는 것을 의미한다. 함수 `prcomp()`의 옵션 `center = TRUE`와 `scale = TRUE`를 지정하여 변수를 표준화한 후, 상관행렬에 기초한 주성분분석을 수행할 수 있다.  
+`Result!` 상관행렬을 이용한 주성분분석 결과는 위에서 공분산행렬에 기초하여 수행한 주성분분석 결과와는 다른 것을 확인할 수 있다.
+
+--------------------------
+
+```{r}
+student.cor.prcomp$sdev        # 주성분의 표준편차
+student.cor.prcomp$sdev^2      # 주성분의 분산 = 주성분에 의해 설명되는 분산의 양 = 상관행렬의 고유값
+```
+
+`Caution!` 주성분의 분산은 함수 `eigen(cor(student[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 상관행렬의 고유값과 동일하며, 상관행렬의 대각성분 합이 주성분 분산의 합(상관행렬의 고유값의 합)인 변수 개수 "5"와 같음을 알 수 있다.
+
+----------------------------
+
+```{r}
+student.cor.prcomp$rotation    # 주축의 계수
+```
+
+`Caution!` 주축의 계수는 함수 `eigen(cor(student[,c("x1", "x2", "x3", "x4", "x5")]))`를 통해 얻어진 상관행렬의 단위 고유벡터와 동일하다.  
+`Result!` 첫 번째 주성분은 $Y_1=0.518Z_{1}+0.452Z_{2}+0.421Z_{3}+0.398Z_{4}+0.439Z_{5}$이며, 두 번째 주성분은 $Y_2=0.094Z_{1}+0.438Z_{2}+0.474Z_{3}-0.574Z_{4}-0.495Z_{5}$이 된다. 여기서 확률변수 $Z_{i}$는 $(X_i-\mu_i)/\sigma_{i}$이며, $\mu_i$와 $\sigma_{i}$는 각각 $X_i$의 평균과 표준편차를 의미한다. 또한, 변수 `x1`-`x5`는 $X_1$-$X_5$로 표현한다.  
+주성분의 의미를 해석해보면, 첫 번째 주성분은 계수가 서로 비슷하므로 전반적인 평점을 나타낸다고 할 수 있으며, 두 번째 주성분은 변수 `x1-x3`와 변수 `x4-x5`의 부호가 반대이므로 국어, 영어, 제2외국어의 "인문계열"과 수학, 과학의 "이과계열"의 점수 차이를 나타낸다고 할 수 있다.
+
+----------------------------
+
+```{r}
+# 요약
+summary(student.cor.prcomp)    
+```
+
+`Result!` 처음 2개의 고유값은 3.187(= $1.7852^2$), 1.472(= $1.2132^2$)로서 각각 전체 변동의 63.7%(= 3.187/5)와 29.4%(= 1.472/5)를 차지한다. 따라서, 처음 2개의 주성분에 의해 데이터 변동의 약 93.2%가 설명될 수 있음을 알 수 있다. 이는 2개의 주성분만으로 데이터 변동을 충분히 설명할 수 있음을 의미한다. 만약 처음 2개의 주성분을 새로운 변수로 고려할 경우, 이는 원래 다섯 개의 예측변수들이 가지고 있는 정보를 2차원으로 축소한다는 의미를 가진다. 
+
+----------------------------
+
+```{r}
+# 변수 적재 Ver.1
+1:5 %>%                                                # 첫 번째 변수부터 다섯 번째 변수에 function을 적용
+  map_df(function(x) student.cor.prcomp$rotation[,x]*student.cor.prcomp$sdev[x]) 
+```
+
+`Caution!` 주성분의 변수 적재(Variable Loading)는 단위 고유벡터(= 주축의 계수)와 고유값의 제곱근(= 주성분의 표준편차)을 곱함으로써 계산될 수 있다. 변수 적재를 계산하기 위해 함수 `map_df()`를 이용한다.  
+`Result!` 변수 적재는 각 변수가 특정 주성분에 얼마나 기여하는지를 설명한다. 결과값의 부호는 양/음의 상관관계를 나타내며, 값의 절대값이 클수록 주성분과 변수는 강한 관계를 가지고 있다. 출력 결과는 피어슨 상관계수처럼 해석할 수 있다. 예를 들어, 변수 `x1`은 첫 번째 주성분과 강한 양의 상관성($r=0.924$)을 가지고 있으며, 변수 `x4`는 두 번째 주성분과 강한 음의 상관성($r=-0.697$)을 가지고 있다.
+
+```{r}
+# 변수 적재 Ver.2
+pcaDat <- get_pca(student.cor.prcomp)                  # 주성분 결과에서 변수에 대한 정보(좌표, 제곱 코사인, 기여) 추출
+round(pcaDat$coord,3)                                  # 변수 적재
+```
+
+`Caution!` 변수 적재는 package `"factoextra"`에서 제공하는 함수 `get_pca()`를 이용하여 계산할 수 있다.
+
+--------------------------
+
+```{r}
+# 변수 적재 그래프
+fviz_pca_var(student.cor.prcomp)
+```
+
+`Result!` 그래프의 x축과 y축은 각각 첫 번째 주성분과 두 번째 주성분에 대한 변수 적재값을 의미하며, 특정 주축을 기준으로 화살표의 길이가 길수록 해당 변수와 해당 주성분은 강한 상관성을 가진다.
+
+----------------------------
+
+```{r}
+# 주성분 점수
+student.cor.score <- student.cor.prcomp$x           
+student.cor.score
+```
+
+`Caution!` 주성분 점수는 각 case의 관측값을 주성분에 대입함으로써 얻을 수 있으며, 고차원의 원본 데이터셋 대신 차원이 축소된 데이터셋으로 유용하게 사용될 수 있다. 함수 `prcomp()`를 이용한 결과 `student.cor.prcomp`에는 주성분 점수가 포함되어 있다.  
+`Result!` 첫 번째 주성분과 두 번째 주성분에 의해 얻어지는 $i$번째 case의 주성분 점수는 다음의 식을 이용하여 얻을 수 있다.
+$$
+\begin{align}
+\begin{cases}
+y_{i1}=0.518z_{i1}+0.452z_{i2}+0.421z_{i3}+0.398z_{i4}+0.439z_{i5},\\
+y_{i2}=0.094z_{i1}+0.438z_{i2}+0.474z_{i3}-0.574z_{i4}-0.495z_{i5},
+\end{cases}
+\end{align}
+$$
+여기서 $z_{ij}=(x_{ij}-\bar{x}_{j})/s_{j}$는 $i$번째 case의 $j$번째 변수 관찰값 $x_{ij}$에서 $j$번째 변수의 평균값 $\bar{x}_j$을 뺀 후 $j$번째 변수의 표준편차 값 $s_j$로 나눈 것을 의미한다.
+
+------------------
+
+```{r}
+# 주성분 점수 그래프 Ver.1
+plot(student.cor.score[,1:2], 
+     main = "Case별 주성분 점수")
+abline(v = 0, h = 0, lty = 2)
+text(student.cor.score[,1:2],  labels = student$ID, pos = 4, col = "red")
+
+# 주성분 점수 그래프 Ver.2
+studentPca <- student %>%
+  mutate(PCA1 = student.cor.score[, 1], PCA2 = student.cor.score[, 2])
+ggplot(studentPca, aes(PCA1, PCA2)) +
+  geom_point() +
+  geom_hline(yintercept=0, linetype='dashed', color='black') + 
+  geom_vline(xintercept=0, linetype='dashed', color='black') + 
+  geom_text(aes(label = ID), hjust=0, vjust=0) +
+  theme_bw()
+```
+
+`Result!` 그래프의 수직선을 중심으로 오른쪽에 위치하는 점들은 첫 번째 주성분 점수가 높다는 것을 의미하고 왼쪽에 위치하는 점들은 첫 번째 주성분 점수가 낮다는 것을 의미한다. 그래프를 살펴보면, 그래프의 오른쪽에 위치하는 "10", "9", "7"번 case는 첫 번째 주성분 값이 높으며, 이는 "10", "9", "7"번 case의 전반적인 평점이 높다고 해석할 수 있다. 반면, 왼쪽에 위치하는 "1", "2", "6"번 case는 전반적인 평점이 낮다고 해석할 수 있다. 마찬가지로 수평선을 중심으로 위쪽에 위치하는 점들은 두 번째 주성분 점수가 높다는 것을 의미하고 아래쪽에 위치하는 점들은 두 번째 주성분 점수가 낮다는 것을 의미한다. 두 번째 주성분 점수가 높다는 것은 국어, 영어, 제2외국어 등 인문계열 과목에 대해서는 점수가 높으나 수학, 과학 등 이과계열 과목에 대해서는 점수가 낮다고 해석할 수 있다.
+
+------------------
+
+```{r}
+# 주성분 점수 예측
+predict(student.cor.prcomp, newdata = tail(student[,c("x1", "x2", "x3", "x4", "x5")], 2))
+```
+
+`Caution!` 함수 `predict()`를 이용하여 새로운 case에 대한 주성분 점수를 예측할 수 있다. 여기서는 설명의 편의상 마지막 2개의 case를 새로운 자료로 취급하여 예측을 수행하였다.  
+
+--------------------
+
+```{r}
+# Biplot
+fviz_pca_biplot(student.cor.prcomp, label = "var")
+```
+
+`Caution!` 주성분 점수와 변수 적재를 하나의 그래프에 함께 표현한 것을 행렬도(Biplot)라고 한다. 위 Biplot에서는 주성분 점수를 점으로 표현하고, 변수 적재를 화살표로 표현한다. Biplot는 다음을 기준으로 해석할 수 있다.  
+1. 점은 각 case(데이터셋에서 하나의 행)에 대한 주성분 점수를 나타낸다.  
+2. 화살표는 변수 적재값을 의미하며, 정확한 변수 적재값은 알 수 없다.  
+3. 화살표의 길이는 상관성의 정도를 표현한다. 즉, 주축을 기준으로 화살표의 길이가 길수록 변수와 해당 주성분은 강한 상관성을 가진다.  
+4. 화살표와 주축이 평행에 가까울수록 해당 변수는 해당 주성분에만 큰 영향을 미친다.  
+5. 화살표들 간의 각도가 작을수록 해당 변수들은 강한 양의 상관관계를 나타내며, 180도는 강한 음의 상관관계를 나타낸다. 또한, 직각은 상관성이 없음을 의미한다.    
+Biplot을 통해서 군집성, 변수들의 상관구조 등을 시각적으로 파악할 수 있다.  
+`Result!` Biplot의 x축과 y축은 각각 첫 번째와 두 번째 주성분 점수를 의미한다. 변수 `x1`과 `x5`는 첫 번째 주축(x축, 수평 점선)을 기준으로 화살표의 길이가 길며 이는 두 변수가 첫 번째 주성분과 강한 상관성을 가진다고 할 수 있다. 또한, 변수 `x1`, `x2`, `x3`의 화살표들 간의 각도가 작기 때문에(즉, 서로 가까이 위치해있기 때문에) 강한 양의 상관관계를 가지며, 변수 `x4`와 `x5` 또한 강한 양의 상관관계를 가진다.
+
+```{r}
+# ggbiplot을 이용한 Biplot
+ggbiplot(student.cor.prcomp,                           # 함수 prcomp에 의한 객체
+         obs.scale = 1,                                # 관찰값에 적용할 스케일
+         var.scale = 1,                                # 변수에 적용할 스케일
+         labels = student$ID,                          # 점에 대한 라벨
+         circle = TRUE) +
+  theme_bw()
+```
+
+`Caution!` Package `"ggbiplot"`에서 제공하는 함수 `ggbiplot()`를 이용하여 Biplot을 만들 수 있으며, 함수에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55/topics/ggbiplot)를 참고한다.
+
+--------------------------
+
+```{r}
+# 스크리 그래프 Ver.1 (y축 : 고유값)
+par(mfrow = c(1, 2))
+screeplot(student.cor.prcomp, type = "b", main = "")   # 막대그래프
+screeplot(student.cor.prcomp, type = "l", main = "")   # 선 그래프
+
+# 스크리 그래프 Ver.2
+fviz_screeplot(student.cor.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               # geom = "line",                        # 그래프 유형(bar / line)
+               choice = "eigenvalue",                  # y축 (variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+fviz_screeplot(student.cor.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               choice = "variance",                    # y축(variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+```
+
+`Result!` 스크리 그래프를 보면 첫 번째 주성분과 두 번째 주성분의 분산(고유값)이 크며 가파른 경사를 형성한다. 그러므로, 2개의 주성분 개수를 고려할 수 있다.
+
+--------------------------
+
+# **예제 3**
+
+- Package `"mclust"`에서 제공하는 데이터 `banknote`는 100개의 진품과 100개의 위조 옛날 스위스 1000프랑 지폐에 대해 측정된 6개의 변수값을 제공한다.
+    1. `Status` : 지폐의 상태
+        - genuine : 진품
+        - counterfeit : 위조
+    2. `Length` : 지폐의 길이
+    3. `Left` : 왼쪽 가장자리 너비
+    4. `Right` : 오른쪽 가장자리 너비
+    5. `Bottom` : 하단 여백 너비
+    6. `Top` : 상단 여백 너비
+    7. `Diagonal` : 대각선 길이
+    
+--------------------------
+
+## **1. 데이터 불러오기**
+    
+```{r}
+# 데이터 불러오기
+data(banknote, package = "mclust")
+
+swissTib <- as_tibble(banknote)
+swissTib
+```
+    
+--------------------------
+
+## **2. 데이터 탐색**
+
+</br>
+
+### **2-1. 기술통계량**
+
+```{r}
+describe(swissTib[,-1])
+```
+
+`Result!` 변수 `Bottom`의 표준편차는 다른 변수들에 비해 상대적으로 큰 반면, 변수 `Left`의 표준편차는 다른 변수들에 비해 상대적으로 작다.
+
+--------------------------
+
+### **2-2. 상관행렬**
+
+```{r}
+cor(swissTib[,-1])
+```
+
+`Result!` 변수 `Left`와 `Right` 사이의 상관계수는 0.74로 가장 강한 양의 상관성을 보인다. 게다가, 변수 `Bottom`과 `Diagonal` 사이의 상관계수는 -0.62로 강한 음의 상관성을 보인다.
+
+--------------------------
+
+### **2-3. 산점도행렬**
+
+```{r}
+ggpairs(swissTib,
+  mapping = aes(col = Status), alpha = 0.8) +               # 변수 Status의 범주에 따라 색깔을 다르게 표현
+  scale_colour_manual(values = c("#00798c", "#d1495b")) +   # 특정 색깔 지정
+  scale_fill_manual(values = c("#00798c", "#d1495b")) +     # 특정 색깔 지정
+  theme_bw()
+```
+
+--------------------------
+
+## **3. 공분산행렬을 이용한 주성분분석**
+
+```{r}
+swissTib.prcomp <- select(swissTib, -Status) %>%
+  prcomp()
+swissTib.prcomp
+```
+
+`Caution!` 주성분분석은 함수 `prcomp()`를 통해 수행할 수 있다. 자세한 옵션은 `?prcomp`를 통해 확인하거나 [여기](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/prcomp)를 참고한다.  
+`Result!` 함수 `prcomp()`는 5개의 결과를 리스트로 반환한다.  
+
+1. `sdev` : 데이터셋을 주성분에 투영했을 때의 표준편차인 주성분의 표준편차(= 공분산행렬의 고유값의 제곱근)
+    - 출력 결과의 "Standard deviations"와 동일
+2. `rotation` : 주축의 계수(= 공분산행렬의 단위 고유벡터)
+    - 출력 결과의 "Rotation"과 동일
+3. `center` : 변수의 평균
+4. `scale` : 표준편차로 나누어 주는 작업 진행 여부
+5. `x` : 주성분 점수
+
+----------------
+
+```{r}
+swissTib.prcomp$sdev                # 주성분의 표준편차
+swissTib.prcomp$sdev^2              # 주성분의 분산 = 주성분에 의해 설명되는 분산의 양 = 공분산행렬의 고유값
+```
+
+`Caution!` 주성분의 분산은 함수 `eigen(cov(swissTib[,-1]))`를 통해 얻어진 공분산행렬의 고유값과 동일하며, 공분산행렬의 대각성분 합이 주성분 분산의 합(공분산행렬의 고유값의 합)과 같음을 알 수 있다.
+
+----------------
+
+```{r}
+swissTib.prcomp$rotation            # 주축의 계수
+```
+
+`Caution!` 주축의 계수는 함수 `eigen(cov(swissTib[,-1]))`를 통해 얻어진 공분산행렬의 단위 고유벡터와 동일하다.  
+`Result!` 첫 번째 주성분은 $Y_1=0.044C_{\text{Length}}-0.112C_{\text{Left}}-0.139C_{\text{Right}}-768C_{\text{Bottom}}-0.202C_{\text{Top}}+0.579C_{\text{Diagonal}}$이며, 두 번째 주성분은 $Y_2=-0.011C_{\text{Length}}-0.071C_{\text{Left}}-0.066C_{\text{Right}}+0.563C_{\text{Bottom}}-0.659C_{\text{Top}}+0.489C_{\text{Diagonal}}$가 된다. 여기서 확률변수 $C_{i}$는 $X_i-\mu_i$이며, $\mu_i$는 $X_i$의 평균을 의미한다. 또한, 변수 `Left`의 확률변수를 $X_{\text{Left}}$로 나타내며, 다른 변수들도 동일한 방식으로 나타낸다.
+
+----------------
+
+```{r}
+# 요약
+summary(swissTib.prcomp)       
+```
+
+`Result!` 처음 2개의 고유값은 3.000(= $1.7321^2$), 0.936(= $0.9673^2$)로서 각각 전체 변동의 66.8%(= 3.000/4.4947)와 20.8%(= 0.936/4.4947)를 차지한다. 따라서, 처음 2개의 주성분에 의해 데이터 변동의 약 87.6%가 설명될 수 있음을 알 수 있다. 이는 2개의 주성분만으로 데이터 변동을 충분히 설명할 수 있음을 의미한다. 만약 처음 2개의 주성분을 새로운 변수로 고려할 경우, 이는 원래 여섯 개의 예측변수들이 가지고 있는 정보를 2차원으로 축소한다는 의미이다.
+
+------------------
+
+```{r}
+# 변수 적재 Ver.1
+1:6 %>%                                                # 첫 번째 변수부터 여섯 번째 변수에 function을 적용
+  map_df(function(x) swissTib.prcomp$rotation[,x]*swissTib.prcomp$sdev[x]) 
+```
+
+`Caution!` 주성분의 변수 적재(Variable Loading)는 단위 고유벡터(= 주축의 계수)와 고유값의 제곱근(= 주성분의 표준편차)을 곱함으로써 계산될 수 있다. 변수 적재를 계산하기 위해 함수 `map_df()`를 이용한다.  
+`Result!` 변수 적재는 각 변수가 특정 주성분에 얼마나 기여하는지를 설명한다. 결과값의 부호는 양/음의 상관관계를 나타내며, 값의 절대값이 클수록 주성분과 변수는 강한 관계를 가지고 있다. 출력 결과는 주성분과 변수 사이의 공분산처럼 해석할 수 있다. 예를 들어, 변수 `Bottom`은 첫 번째 주성분과 음의 상관성(-1.33)을 가지고 있으며, 변수 `Diagonal`은 첫 번째 주성분과 양의 상관성(1.00)을 가지고 있다.
+
+```{r}
+# 변수 적재 Ver.2
+pcaDat <- get_pca(swissTib.prcomp)                     # 주성분 결과에서 변수에 대한 정보(좌표, 제곱 코사인, 기여) 추출
+round(pcaDat$coord,3)                                  # 변수 적재
+```
+
+`Caution!` 변수 적재는 package `"factoextra"`에서 제공하는 함수 `get_pca()`를 이용하여 계산할 수 있다.
+
+--------------------------
+
+```{r}
+# 변수 적재 그래프
+fviz_pca_var(swissTib.prcomp)
+```
+
+`Result!` 그래프의 x축과 y축은 각각 첫 번째 주성분과 두 번째 주성분에 대한 변수 적재값을 의미하며, 특정 주축을 기준으로 화살표의 길이가 길수록 해당 변수와 해당 주성분은 강한 상관성을 가진다.
+
+------------------
+
+```{r}
+# 주성분 점수
+swissTib.score <- swissTib.prcomp$x           
+swissTib.score
+```
+
+`Caution!` 주성분 점수는 각 case의 관측값을 주성분에 대입함으로써 얻을 수 있으며, 고차원의 원본 데이터셋 대신 차원이 축소된 데이터셋으로 유용하게 사용될 수 있다. 함수 `prcomp()`를 이용한 결과 `swissTib.prcomp`에는 주성분 점수가 포함되어 있다.  
+`Result!` 첫 번째 주성분과 두 번째 주성분에 의해 얻어지는 $i$번째 case의 주성분 점수는 다음의 식을 이용하여 얻을 수 있다.
+$$
+\begin{align}
+\begin{cases}
+y_{i1}=0.044c_{i1}-0.112c_{i2}-0.139c_{i3}-0.768c_{i4}-0.202c_{i5}+0.579c_{i6},\\
+y_{i2}=-0.011c_{i1}-0.071c_{i2}-0.066c_{i3}+0.563c_{i4}-0.659c_{i5}+0.489c_{i6},
+\end{cases}
+\end{align}
+$$
+여기서 $c_{ij}=x_{ij}-\bar{x}_{j}$는 $i$번째 case의 $j$번째 변수 관찰값 $x_{ij}$에서 $j$번째 변수의 평균값 $\bar{x}_j$을 뺀 것을 의미한다.
+
+------------------
+
+```{r}
+# 지폐의 상태에 따른 주성분 점수 그래프 Ver.1
+plot(swissTib.score[,1:2],                             # 첫 번째와 두 번째 주성분 점수
+     main = "지폐의 상태별 주성분 점수")
+abline(v = 0, h = 0, lty = 2)
+text(swissTib.score[,1:2],  labels = swissTib$Status, pos = 4, col = "red")
+
+# 지폐의 상태에 따른 주성분 점수 그래프 Ver.2
+swissTibPca <- swissTib %>%
+  mutate(PCA1 = swissTib.score[, 1], PCA2 = swissTib.score[, 2])
+ggplot(swissTibPca, aes(PCA1, PCA2, 
+                        col = Status)) +               # 변수 Status의 범주에 따라 색깔을 다르게 표현
+  geom_point() +
+  geom_hline(yintercept=0, linetype='dashed', color='black') + 
+  geom_vline(xintercept=0, linetype='dashed', color='black') + 
+  theme_bw()
+```
+
+`Result!` 그래프의 수직선을 중심으로 오른쪽에 위치하는 점들은 첫 번째 주성분 점수가 높다는 것을 의미하고 왼쪽에 위치하는 점들은 첫 번째 주성분 점수가 낮다는 것을 의미한다. 오른쪽에 위치하는 점들은 대부분 "진품"(genuine)이므로, 전반적으로 진품인 지폐가 위조 지폐보다 첫 번째 주성분 점수가 높다고 해석할 수 있다. 마찬가지로 수평선을 중심으로 위쪽에 위치하는 점들은 두 번째 주성분 점수가 높다는 것을 의미하고 아래쪽에 위치하는 점들은 두 번째 주성분 점수가 낮다는 것을 의미한다.
+
+------------------
+
+```{r}
+# 주성분 점수 예측
+predict(swissTib.prcomp, newdata = tail(swissTib[,-1], 2))
+```
+
+`Caution!` 함수 `predict()`를 이용하여 새로운 case에 대한 주성분 점수를 예측할 수 있다. 여기서는 설명의 편의상 마지막 2개의 case를 새로운 자료로 취급하여 예측을 수행하였다.  
+
+
+--------------------
+
+```{r}
+# Biplot
+fviz_pca_biplot(swissTib.prcomp, label = "var")
+```
+
+`Caution!` 주성분 점수와 변수 적재를 하나의 그래프에 함께 표현한 것을 행렬도(Biplot)라고 한다. 위 Biplot에서는 주성분 점수를 점으로 표현하고, 변수 적재를 화살표로 표현한다. Biplot는 다음을 기준으로 해석할 수 있다.  
+1. 점은 각 case(데이터셋에서 하나의 행)에 대한 주성분 점수를 나타낸다.  
+2. 화살표는 변수 적재값을 의미하며, 정확한 변수 적재값은 알 수 없다.  
+3. 화살표의 길이는 상관성의 정도를 표현한다. 즉, 주축을 기준으로 화살표의 길이가 길수록 변수와 해당 주성분은 강한 상관성을 가진다.  
+4. 화살표와 주축이 평행에 가까울수록 해당 변수는 해당 주성분에만 큰 영향을 미친다.  
+5. 화살표들 간의 각도가 작을수록 해당 변수들은 강한 양의 상관관계를 나타내며, 180도는 강한 음의 상관관계를 나타낸다. 또한, 직각은 상관성이 없음을 의미한다.    
+Biplot을 통해서 군집성, 변수들의 상관구조 등을 시각적으로 파악할 수 있다.    
+`Result!` Biplot의 x축과 y축은 각각 첫 번째와 두 번째 주성분 점수를 의미한다. 변수 `Bottom`과 `Diagonal`은 첫 번째 주축(x축, 수평 점선)을 기준으로 화살표의 길이가 길며 이는 두 변수가 첫 번째 주성분과 강한 상관성을 가진다고 할 수 있다. 또한, 변수 `Right`와 `Left`의 화살표들 간의 각도가 작기 때문에(즉, 서로 가까이 위치해있기 때문에) 강한 양의 상관관계를 가지며, 변수 `Right`와 `Diagonal`은 화살표들 간의 각도가 180도를 이루므로 강한 음의 상관관계를 가진다. 
+
+```{r}
+# ggbiplot을 이용한 Biplot
+ggbiplot(swissTib.prcomp,                              # 함수 prcomp에 의한 객체
+         obs.scale = 1,                                # 관찰값에 적용할 스케일
+         var.scale = 1,                                # 변수에 적용할 스케일
+         circle = TRUE) +
+  theme_bw()
+```
+
+`Caution!` Package `"ggbiplot"`에서 제공하는 함수 `ggbiplot()`를 이용하여 Biplot을 만들 수 있으며, 함수에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55/topics/ggbiplot)를 참고한다.
+
+
+--------------------------
+
+```{r}
+# 스크리 그래프 Ver.1 (y축 : 고유값)
+par(mfrow = c(1, 2))
+screeplot(swissTib.prcomp, type = "b", main = "")      # 막대그래프
+screeplot(swissTib.prcomp, type = "l", main = "")      # 선 그래프
+
+# 스크리 그래프 Ver.2
+fviz_screeplot(swissTib.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               # geom = "line",                        # 그래프 유형(bar / line)
+               choice = "eigenvalue",                  # y축 (variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+fviz_screeplot(swissTib.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               choice = "variance",                    # y축(variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+```
+
+`Result!` 스크리 그래프를 보면 첫 번째 주성분과 두 번째 주성분의 분산(고유값)이 크며 가파른 경사를 형성한다. 그러므로, 2개의 주성분 개수를 고려할 수 있다.
+
+--------------------------
+
+## **4. 상관행렬을 이용한 주성분분석**
+
+```{r}
+swissTib.cor.prcomp <- select(swissTib, -Status) %>%
+  prcomp(center = TRUE, scale = TRUE)
+swissTib.cor.prcomp
+```
+
+`Caution!` 상관행렬에 기초하여 주성분분석을 수행한다는 것은 표준화된 변수를 이용하여 주성분분석을 수행한다는 것을 의미한다. 함수 `prcomp()`의 옵션 `center = TRUE`와 `scale = TRUE`를 지정하여 변수를 표준화한 후, 상관행렬에 기초한 주성분분석을 수행할 수 있다.  
+`Result!` 상관행렬을 이용한 주성분분석 결과는 위에서 공분산행렬에 기초하여 수행한 주성분분석 결과와는 다른 것을 확인할 수 있다.
+
+----------------------------------------
+
+```{r}
+swissTib.cor.prcomp$sdev        # 주성분의 표준편차
+swissTib.cor.prcomp$sdev^2      # 주성분의 분산 = 주성분에 의해 설명되는 분산의 양 = 상관행렬의 고유값
+```
+
+`Caution!` 주성분의 분산은 함수 `eigen(cor(swissTib[,-1]))`를 통해 얻어진 상관행렬의 고유값과 동일하며, 상관행렬의 대각성분 합이 주성분 분산의 합(상관행렬의 고유값의 합)인 변수 개수 "6"과 같음을 알 수 있다.
+
+----------------------------
+
+```{r}
+swissTib.cor.prcomp$rotation    # 주축의 계수
+```
+
+`Caution!` 주축의 계수는 함수 `eigen(cor(swissTib[,-1]))`를 통해 얻어진 상관행렬의 단위 고유벡터와 동일하다.  
+`Result!` 첫 번째 주성분은 $Y_1=0.007Z_{\text{Length}}-0.468Z_{\text{Left}}-0.487Z_{\text{Right}}-0.407Z_{\text{Bottom}}-0.368Z_{\text{Top}}+0.493Z_{\text{Diagonal}}$이며, 두 번째 주성분은 $Y_2=-0.815Z_{\text{Length}}-0.342Z_{\text{Left}}-0.252Z_{\text{Right}}+0.266Z_{\text{Bottom}}+0.091Z_{\text{Top}}-0.274Z_{\text{Diagonal}}$가 된다. 여기서 확률변수 $Z_{i}$는 $(X_i-\mu_i)/\sigma_{i}$이며, $\mu_i$와 $\sigma_{i}$는 각각 $X_i$의 평균과 표준편차를 의미한다. 또한, 변수 `Left`의 확률변수를 $X_{\text{Left}}$로 나타내며, 다른 변수들도 동일한 방식으로 나타낸다.
+
+----------------------------
+
+```{r}
+# 요약
+summary(swissTib.cor.prcomp)  
+```
+
+`Result!` 처음 3개의 고유값은 2.9456(= $1.7163^2$), 1.2781(= $1.1305^2$), 0.8690(= $0.9322^2$)로서 각각 전체 변동의 49.1%(= 2.9456/6), 21.3%(= 1.2781/6) 그리고 14.5%(= 0.8690/6)를 차지한다. 따라서, 처음 3개의 주성분에 의해 데이터 변동의 약 84.9%가 설명될 수 있음을 알 수 있다. 이는 3개의 주성분만으로 데이터 변동을 충분히 설명할 수 있음을 의미한다. 만약 처음 3개의 주성분을 새로운 변수로 고려할 경우, 이는 원래 여섯 개의 예측변수들이 가지고 있는 정보를 3차원으로 축소한다는 의미를 가진다.
+
+----------------------------
+
+```{r}
+# 변수 적재 Ver.1
+1:6 %>%                                                # 첫 번째 변수부터 여섯 번째 변수에 function을 적용
+  map_df(function(x) swissTib.cor.prcomp$rotation[,x]*swissTib.cor.prcomp$sdev[x]) 
+```
+
+`Caution!` 주성분의 변수 적재(Variable Loading)는 단위 고유벡터(= 주축의 계수)와 고유값의 제곱근(= 주성분의 표준편차)을 곱함으로써 계산될 수 있다. 변수 적재를 계산하기 위해 함수 `map_df()`를 이용한다.  
+`Result!` 변수 적재는 각 변수가 특정 주성분에 얼마나 기여하는지를 설명한다. 결과값의 부호는 양/음의 상관관계를 나타내며, 값의 절대값이 클수록 주성분과 변수는 강한 관계를 가지고 있다. 출력 결과는 피어슨 상관계수처럼 해석할 수 있다. 예를 들어, 변수 `Length`는 첫 번째 주성분과 상관관계($r=0.0120$)가 매우 작지만 두 번째 주성분과는 매우 강한 음의 상관관계($r=-0.922)$를 가지고 있음을 알 수 있다.
+
+```{r}
+# 변수 적재 Ver.2
+pcaDat <- get_pca(swissTib.cor.prcomp)                 # 주성분 결과에서 변수에 대한 정보(좌표, 제곱 코사인, 기여) 추출
+round(pcaDat$coord,3)                                  # 변수 적재
+```
+
+`Caution!` 변수 적재는 package `"factoextra"`에서 제공하는 함수 `get_pca()`를 이용하여 계산할 수 있다.
+
+--------------------------
+
+```{r}
+# 변수 적재 그래프
+fviz_pca_var(swissTib.cor.prcomp)
+```
+
+`Result!` 그래프의 x축과 y축은 각각 첫 번째 주성분과 두 번째 주성분에 대한 변수 적재값을 의미하며, 특정 주축을 기준으로 화살표의 길이가 길수록 해당 변수와 해당 주성분은 강한 상관성을 가진다.
+
+----------------------------
+
+```{r}
+# 주성분 점수
+swissTib.cor.score <- swissTib.cor.prcomp$x           
+swissTib.cor.score
+```
+
+`Caution!` 주성분 점수는 각 case의 관측값을 주성분에 대입함으로써 얻을 수 있으며, 고차원의 원본 데이터셋 대신 차원이 축소된 데이터셋으로 유용하게 사용될 수 있다. 함수 `prcomp()`를 이용한 결과 `swissTib.cor.prcomp`에는 주성분 점수가 포함되어 있다.  
+`Result!` 첫 번째 주성분과 두 번째 주성분에 의해 얻어지는 $i$번째 case의 주성분 점수는 다음의 식을 이용하여 얻을 수 있다.
+$$
+\begin{align}
+\begin{cases}
+y_{i1}=0.007z_{i1}-0.468z_{i2}-0.487z_{i3}-0.407z_{i4}-0.368z_{i5}+0.493z_{i6},\\
+y_{i2}=-0.815z_{i1}-0.342z_{i2}-0.252z_{i3}+0.266z_{i4}+0.091z_{i5}-0.274z_{i6},
+\end{cases}
+\end{align}
+$$
+여기서 $z_{ij}=(x_{ij}-\bar{x}_{j})/s_{j}$는 $i$번째 case의 $j$번째 변수 관찰값 $x_{ij}$에서 $j$번째 변수의 평균값 $\bar{x}_j$을 뺀 후 $j$번째 변수의 표준편차 값 $s_j$로 나눈 것을 의미한다.
+
+------------------
+
+```{r}
+# 지폐의 상태에 따른 주성분 점수 그래프 Ver.1
+plot(swissTib.cor.score[,1:2],                         # 첫 번째와 두 번째 주성분 점수
+     main = "지폐의 상태별 주성분 점수")
+abline(v = 0, h = 0, lty = 2)
+text(swissTib.cor.score[,1:2],  labels = swissTib$Status, pos = 4, col = "red")
+
+# 지폐의 상태에 따른 주성분 점수 그래프 Ver.2
+swissTibPca <- swissTib %>%
+  mutate(PCA1 = swissTib.cor.score[, 1], PCA2 = swissTib.cor.score[, 2])
+ggplot(swissTibPca, aes(PCA1, PCA2, 
+                        col = Status)) +               # 변수 Status의 범주에 따라 색깔을 다르게 표현
+  geom_point() +
+  geom_hline(yintercept=0, linetype='dashed', color='black') + 
+  geom_vline(xintercept=0, linetype='dashed', color='black') + 
+  theme_bw()
+```
+
+`Result!` 그래프의 수직선을 중심으로 오른쪽에 위치하는 점들은 첫 번째 주성분 점수가 높다는 것을 의미하고 왼쪽에 위치하는 점들은 첫 번째 주성분 점수가 낮다는 것을 의미한다. 오른쪽에 위치하는 점들은 대부분 "진품"(genuine)이므로, 전반적으로 진품인 지폐가 위조 지폐보다 첫 번째 주성분 점수가 높다고 해석할 수 있다. 마찬가지로 수평선을 중심으로 위쪽에 위치하는 점들은 두 번째 주성분 점수가 높다는 것을 의미하고 아래쪽에 위치하는 점들은 두 번째 주성분 점수가 낮다는 것을 의미한다.
+
+------------------
+
+```{r}
+# 주성분 점수 예측
+predict(swissTib.cor.prcomp, newdata = tail(swissTib[,-1], 2))
+```
+
+`Caution!` 함수 `predict()`를 이용하여 새로운 case에 대한 주성분 점수를 예측할 수 있다. 여기서는 설명의 편의상 마지막 2개의 case를 새로운 자료로 취급하여 예측을 수행하였다.  
+
+
+--------------------
+
+```{r}
+# Biplot
+fviz_pca_biplot(swissTib.cor.prcomp, label = "var")
+```
+
+`Caution!` 주성분 점수와 변수 적재를 하나의 그래프에 함께 표현한 것을 행렬도(Biplot)라고 한다. 위 Biplot에서는 주성분 점수를 점으로 표현하고, 변수 적재를 화살표로 표현한다. Biplot는 다음을 기준으로 해석할 수 있다.  
+1. 점은 각 case(데이터셋에서 하나의 행)에 대한 주성분 점수를 나타낸다.  
+2. 화살표는 변수 적재값을 의미하며, 정확한 변수 적재값은 알 수 없다.  
+3. 화살표의 길이는 상관성의 정도를 표현한다. 즉, 주축을 기준으로 화살표의 길이가 길수록 변수와 해당 주성분은 강한 상관성을 가진다.  
+4. 화살표와 주축이 평행에 가까울수록 해당 변수는 해당 주성분에만 큰 영향을 미친다.  
+5. 화살표들 간의 각도가 작을수록 해당 변수들은 강한 양의 상관관계를 나타내며, 180도는 강한 음의 상관관계를 나타낸다. 또한, 직각은 상관성이 없음을 의미한다.    
+Biplot을 통해서 군집성, 변수들의 상관구조 등을 시각적으로 파악할 수 있다.  
+`Result!` Biplot의 x축과 y축은 각각 첫 번째와 두 번째 주성분 점수를 의미한다. 변수 `Right`와 `Diagonal`은 첫 번째 주축(x축, 수평 점선)을 기준으로 화살표의 길이가 길며 이는 두 변수가 첫 번째 주성분과 강한 상관성을 가진다고 할 수 있다. 또한, 변수 `Right`와 `Left`의 화살표들 간의 각도가 작기 때문에(즉, 서로 가까이 위치해있기 때문에) 강한 양의 상관관계를 가지며, 변수 `Bottom`과 `Diagonal`은 화살표들 간의 각도가 180도를 이루므로 강한 음의 상관관계를 가진다. 
+
+```{r}
+# ggbiplot을 이용한 Biplot
+ggbiplot(swissTib.cor.prcomp,                          # 함수 prcomp에 의한 객체
+         obs.scale = 1,                                # 관찰값에 적용할 스케일
+         var.scale = 1,                                # 변수에 적용할 스케일
+         circle = TRUE) +
+  theme_bw()
+```
+
+`Caution!` Package `"ggbiplot"`에서 제공하는 함수 `ggbiplot()`를 이용하여 Biplot을 만들 수 있으며, 함수에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55/topics/ggbiplot)를 참고한다.
+
+
+--------------------------
+
+```{r}
+# 스크리 그래프 Ver.1 (y축 : 고유값)
+par(mfrow = c(1, 2))
+screeplot(swissTib.cor.prcomp, type = "b", main = "")  # 막대그래프
+screeplot(swissTib.cor.prcomp, type = "l", main = "")  # 선 그래프
+
+# 스크리 그래프 Ver.2
+fviz_screeplot(swissTib.cor.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               # geom = "line",                        # 그래프 유형(bar / line)
+               choice = "eigenvalue",                  # y축 (variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+fviz_screeplot(swissTib.cor.prcomp, 
+               addlabels = TRUE,                       # 막대 높이 표시 여부
+               choice = "variance",                    # y축(variance / eigenvalue)
+               linecolor = "#FC4E07",                  # 선 색깔
+               barcolor = "#00AFBB",                   # 막대의 윤곽선 색깔
+               barfill = "#00AFBB")                    # 막대의 색깔
+```
+
+`Result!` 스크리 그래프를 보면 첫 번째 주성분, 두 번째 주성분 그리고 세 번째 주성분의 분산(고유값)이 크며 가파른 경사를 형성한다. 그러므로, 3개의 주성분 개수를 고려할 수 있다.

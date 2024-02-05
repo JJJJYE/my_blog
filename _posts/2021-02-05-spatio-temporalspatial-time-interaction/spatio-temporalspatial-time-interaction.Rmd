@@ -1,0 +1,500 @@
+---
+title: "Spatio-Temporal(Spatial-Time Interaction)"
+description: |
+  Summary Nonparametric Dynamic Trend of Spatio-Temporal Model with Spatial-Time Interaction
+author:
+  - name: Yeongeun Jeon
+date: 02-05-2021
+preview: preview.PNG
+categories: Spatial Statistics
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+>INLA는 잠재 가우스 모형 (latent gaussian model)에 특화된 방법이며 복잡한 사후 분포를 단순화된 라플라스 근사치를 이용하고 적분을 유한개의 가중 합으로 계산하기 때문에 MCMC에 비해 비교적 짧은 계산시간에 정확한 결과를 제공한다는 이점이 있다. 이러한 장점을 이용하여 2017년 ~ 2019년에  서울에서 발생한 5대강력범죄를 분석하기 위해 [R-INLA (Integrated Nested Laplace Approximations)](https://www.r-inla.org/)를 적용해보았다. 데이터는 [서울 열린데이터광장](https://data.seoul.go.kr/)에서 수집하였다. 게다가 범죄발생은 공간과 밀접한 관련이 있다는 것은 잘 알려진 것이며, 공간의 가변적 특성을 고려한다면 `시공간 모형(Spatio-Temporal Model)`을 적용하여 분석하는 것이 적절하다. 공간 모형으로는 `BYM Model`, 시간 모형으로는 `"Nonparametric Dynamic Trend"`을 이용하였다. 
+
+
+
+--------
+
+# **Spatial-Temporal Interaction**
+
+서울 강간강제추행범죄는 count data이기 때문에 Poisson regression이 사용된다.
+$i$번째 자치구의 $t$시간에서 발생한 5대 강력범죄 건수를 $y_{it}$라고 할 때,
+\begin{align*}
+y_{it} &\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}\\
+\eta_{it} &= \log{\rho_{it}} = b_{0} + u_{i} + v_{i} + \gamma_{t} + \phi_{t} + \delta_{it}
+\end{align*}
+
+- $E_{it}$ : $t$시간에 $i$번째 자치구의 예상된 수
+- $\rho_{it}$ :$t$시간에 $i$번째 자치구의 상대적 위험 (Relative risk)
+- $b_{0}$ : 모든 자치구에서의 평균 $y$
+- $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
+- $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
+- $\gamma_{t}$ : 구조화된 시간 효과 (Structured time effect)이며, dynamically 모형화
+- $\phi_{t}$ : 비구조화된 시간 효과 (Unstructured time effect)
+- $\delta_{it}$ : 시공간 상호작용 (Interaction effect) 
+
+서울의 5대강력범죄에 대한 공간 패턴과 시간 패턴을 파악하기 위해서 공간 모형으로는 공간 모형으로는 `BYM Model`, 시간 모형으로는 `"Nonparametric Dynamic Trend"`을 이용한다. 하지만 이 두 모형은 전반적인 공간과 시간 패턴을 파악하기 때문에, 모든 시간 또는 모든 공간에 대해 변하지 않는다. 그렇기 때문에 `시공간 상호작용은 공간과 시간의 주요 요인으로 설명되지 않는 추과 효과를 포착`할 수 있다. 또한 `시간에 따른 공간 패턴`도 파악 할 수 있으며, `각 지역의 추세`도 파악할 수 있다. 시공간 상호작용은 다음과 같은 `네가지의 Type`을 가진다.
+
+
+| Interaction | Parameter interacting 
+| :--:        | :---:
+|   Type I    | $v_{i}$ and $\phi_t$  
+|  Type II    | $v_{i}$ and $\gamma_t$
+|  Type III   | $u_{i}$ and $\phi_t$  
+|  Type IV    | $u_{i}$ and $\gamma_t$
+
+
+-----------
+
+
+# **Real Data**
+
+2017년 ~ 2019년에  서울에서 발생한 5대강력범죄를 분석하기 위해 [R-INLA (Integrated Nested Laplace Approximations)](https://www.r-inla.org/)를 이용하여 시공간모형을 적용해보았다. 데이터는 [서울 열린데이터광장](https://data.seoul.go.kr/)에서 수집하였다.
+
+## **Loading Data**
+
+```{r}
+pacman::p_load("maptools",     # For readShapePoly
+               "spdep",        # For poly2nb
+               "dplyr", 
+               "RColorBrewer", # For brewer.pal
+               "ggplot2",
+               "INLA")
+
+
+
+dat.2017   <- read.csv("2017_crime.csv",header=T) 
+dat.2018   <- read.csv("2018_crime.csv",header=T) 
+dat.2019   <- read.csv("2019_crime.csv",header=T) 
+
+# Convert rows in the order of ESPI_PK
+dat.2017 <- dat.2017[order(dat.2017$ESRI_PK),]
+dat.2018 <- dat.2018[order(dat.2018$ESRI_PK),]
+dat.2019 <- dat.2019[order(dat.2019$ESRI_PK),]
+
+
+# Change for year
+dat.2017 <- dat.2017 %>%
+  mutate(year = 1)
+
+dat.2018 <- dat.2018 %>%
+  mutate(year = 2)
+
+dat.2019 <- dat.2019 %>%
+  mutate(year = 3)
+
+# Combining for data
+dat        <- rbind(dat.2017, dat.2018, dat.2019)
+```
+
+
+----------
+
+## **Loading .shp**
+
+```{r}
+seoul.map   <- maptools::readShapePoly("./TL_SCCO_SIG_W_SHP/TL_SCCO_SIG_W.shp")   # Call .shp file
+seoul.nb    <- poly2nb(seoul.map)      # Builds a neighbours list based on regions with contiguous boundaries
+seoul.listw <- nb2listw(seoul.nb)      # Supplements a neighbours list with spatial weights for the chosen coding scheme
+seoul.mat   <- nb2mat(seoul.nb)        # Generates a weights matrix for a neighbours list with spatial weights for the chosen coding scheme
+                                       # Object of class "nb"
+```
+
+-------------
+
+## **Expected Case**
+
+흔하게 사용하는 예상되는 수 ($E_{it}$)는 
+\begin{align*}
+E_{it} = n_{it}\frac{\sum_{t}\sum_{i} y_{it}}{\sum_{t}\sum_{i} n_{it}},
+\end{align*}
+
+- $n_{it}$는 $t$시점에서 $i$ 번째 지역의 인구수
+
+(참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.293)
+
+```{r}
+dat$E <- sum(dat$crime)/sum(dat$pop_total)*dat$pop_total
+```
+
+-------
+
+## **Adjacency Matrix**
+
+INLA에서는 근접행렬을 이용하여 그래프로 나타낼 수 있다.
+
+```{r}
+nb2INLA("Seoul.graph", seoul.nb)   # nb2INLA(저장할 파일 위치, Object of class "nb")
+seoul.adj <- paste(getwd(),"/Seoul.graph",sep="")
+```
+
+```{r}
+H         <- inla.read.graph(filename="Seoul.graph")
+image(inla.graph2matrix(H),xlab="",ylab="")
+```
+
+-----------
+
+
+## **Modeling**
+
+### **Type I**
+
+
+Type I 상호작용은 두 개의 비구조화된 효과 $v_{i}$ 와 $\phi_t$ 상호작용이다. 이 때 상호작용효과 $\delta_{it}\thicksim N(0, 1/\tau_{\delta})$, where $\tau_{\delta}=1/\sigma^2_{\delta}$로 가정된다.
+
+```{r, eval=FALSE}
+f(area.year, model="iid") 
+```
+
+- 상호작용 부분은 독립이고 동일한 분포로 가정한다.
+
+
+```{r}
+dat$ID.area   <- 1:25          # The Identifiers For The Boroughs 
+dat$year1     <- dat$year      # The Identifiers For year 
+dat$area.year <- 1:dim(dat)[1] # Interaction Index (25 areas * 3 years)
+```
+
+
+```{r}
+formulaI  <- crime ~ 1 + f(ID.area, model="bym", graph = seoul.adj) +
+                         f(year, model="rw1") +    # RW of order1
+                         f(year1, model="iid") +   # phi_t
+                         f(area.year, model="iid") # Interaction
+
+lcs       <- inla.make.lincombs(year = diag(3), year1 = diag(3))  # Linear Combination gamma_{t} + phi_{t}
+
+
+model.intI     <- inla(formulaI, family = "poisson", data = dat, E = E, # E = E or offset = log(E)
+                       lincomb = lcs, 
+                       control.predictor=list(compute=TRUE), # Compute the marginals of the model parameters
+                       control.compute = list(dic = TRUE))   # Compute some model choice criteria
+
+summary(model.intI)
+```
+
+
+--------------
+
+#### **Mapping**
+
+
+##### **Interaction Effect**
+
+Spatio-Temporal Interaction Model에서 `시간에 따른 공간패턴`을 파악하기 위하여 상호작용 효과에 대한 그래프를 그려보았다.
+
+
+```{r}
+# Random Effect for spatial structure (ui+vi)
+del   <- model.intI$marginals.random$area.year          # Extract the marginal posterior distribution for each element of the random effects
+exdel <- lapply(del,function(x) inla.emarginal(exp,x))  # The exponential transformation and calculate the posterior mean for each of them
+
+# Define the cutoff for zeta
+exdel.cutoff <- c(0.9, 1.0, 1.1, 1.2)
+
+# Transform in categorical variable
+exdel.cat <- cut(unlist(exdel),breaks=exdel.cutoff,
+                 include.lowest=TRUE)
+
+maps.cat.del <- data.frame(ESRI_PK=dat.2019$ESRI_PK, del1.2017=exdel.cat[1:25], 
+                           del1.2018=exdel.cat[26:50], del1.2019=exdel.cat[51:75])
+
+# For adding name of Seoul
+lbls <- as.character(seoul.map$SIG_ENG_NM)             # 자치구명
+spl  <- list('sp.text', coordinates(seoul.map), lbls, cex=.7)
+
+#Add the categorized zeta to the spatial polygon
+data.boroughs           <- attr(seoul.map, "data")
+attr(seoul.map, "data") <- merge(data.boroughs, maps.cat.del,
+                                 by="ESRI_PK")
+
+
+# Map 
+spplot(obj=seoul.map, zcol= c("del1.2017", "del1.2018", "del1.2019"),
+       names.attr = c("2017", "2018", "2019"),       # Changes Names
+       sp.layout = spl,
+       col.regions=brewer.pal(4,"Blues"), as.table=TRUE)
+
+```
+
+
+- 2018년은 2017년에 비해 색깔이 옅은 지역이 많다.
+   - 위험(risk)이 2017년에 비해 줄어들었다.
+- 2019년은 2018년에 비해 색깔이 진한 지역이 많다.
+   - 위험이 2018년에 비해 증가하였다.
+- 2017년은 용산구, 2019년은 서초구에서 가장 위험이 높다.
+
+
+------
+
+### **Type II**
+
+
+Type II 상호작용은 비구조화된 공간 효과 $v_{i}$ 와 구조화된 시간 효과 $\gamma_t$ 상호작용이다. 이 상호작용은 `랜덤 워크(Random Walk)`를 통해서 명시된 이웃 구조(Neighborhood Structure)이다. 즉, $i$번째 지역에 대한 모수 벡터 $\delta_{i1},\ldots,\delta_{iT}$는 서로 다른 지역들과 독립이며, 시간 요소에 대해서 `랜덤 워크`를 가진다. 그러므로 Type II 상호작용은 `시간적 추세가 지역마다 다르지만 어떠한 공간 구조도 가지고 있지 않을 때 적절`하다.
+
+
+```{r, eval=FALSE}
+f(area identifier, model="iid", group=year identifier, control.group=list(model="rw1"))
+```
+
+- 모든 다른 지역들과 독립적으로 각 지역에 대해서 시간에 따른 랜덤워크(1)을 가정한다.
+
+
+```{r}
+ID.area.int <- dat$ID.area
+year.int    <- dat$year
+```
+
+
+```{r}
+formulaII <- crime ~ 1 + f(ID.area, model="bym", graph = seoul.adj) +
+                         f(year, model="rw1") +    # RW of order1
+                         f(year1, model="iid") +   # phi_t
+                         f(ID.area.int, model="iid", group=year.int,
+                           control.group=list(model="rw1")) # Interaction
+
+lcs       <- inla.make.lincombs(year = diag(3), year1 = diag(3))  # Linear Combination gamma_{t} + phi_{t}
+
+
+model.intII     <- inla(formulaII, family = "poisson", data = dat, E = E, # E = E or offset = log(E)
+                        lincomb = lcs, 
+                        control.predictor=list(compute=TRUE), # Compute the marginals of the model parameters
+                        control.compute = list(dic = TRUE))   # Compute some model choice criteria
+
+summary(model.intII)
+```
+
+
+
+
+--------------
+
+#### **Mapping**
+
+
+##### **Interaction Effect**
+
+
+```{r}
+# Random Effect for spatial structure (ui+vi)
+del   <- model.intII$marginals.random$ID.area.int                 # Extract the marginal posterior distribution for each element of the random effects
+edel <- lapply(del,function(x) inla.emarginal(function(x) x, x))  # Calculate the posterior mean for each of them
+
+
+# Define the cutoff for zeta
+del.cutoff <- c(-0.7,-0.4,-0.1,0.2,0.5,0.8,1.2)
+
+# Transform in categorical variable
+edel.cat <- cut(unlist(edel),breaks=del.cutoff,
+                include.lowest=TRUE)
+
+maps.cat.del2 <- data.frame(ESRI_PK=dat.2019$ESRI_PK, del2.2017=edel.cat[1:25], 
+                            del2.2018=edel.cat[26:50], del2.2019=edel.cat[51:75])
+
+# For adding name of Seoul
+lbls <- as.character(seoul.map$SIG_ENG_NM)             # 자치구명
+spl  <- list('sp.text', coordinates(seoul.map), lbls, cex=.7)
+
+#Add the categorized zeta to the spatial polygon
+data.boroughs           <- attr(seoul.map, "data")
+attr(seoul.map, "data") <- merge(data.boroughs, maps.cat.del2,
+                                 by="ESRI_PK")
+
+
+# Map 
+spplot(obj=seoul.map, zcol= c("del2.2017", "del2.2018", "del2.2019"),
+       names.attr = c("2017", "2018", "2019"),       # Changes Names
+       sp.layout = spl,
+       col.regions=brewer.pal(6,"Blues"), as.table=TRUE)
+
+```
+
+
+- 강남구와 양천구는 2018년에 비해 2019년의 위험은 감소하였다.
+- 마포구는 2017년에 비해 2018년의 위험은 증가하였지만 2019년은 감소하였다.
+- 관악구는 2017년에 비해 2018년의 위험은 감소하였지만 2019년은 증가하였다.
+
+------
+
+### **Type III**
+
+
+Type III 상호작용은 구조화된 공간 효과 $u_{i}$ 와 비구조화된 시간 효과 $\phi_t$ 상호작용이다. 이 상호작용은 `CAR`를 통해서 정의된 이웃 구조(Neighborhood Structure)이다. 즉, $t$ 시간점의 모수 $\delta_{1},\ldots,\delta_{n}$은 다른 시점들로부터 독립인 공간 구조를 가진다. 그러므로 Type III 상호작용은 `공간 구조가 시점마다 다를 때 적절`하다.
+
+
+```{r, eval=FALSE}
+f(year identifier,model="iid", group=area identifier, control.group=list(model="besag", graph))
+```
+
+- 모든 다른 시점과 독립적으로 각 시점에서 지역 식별자(Area Identifier)에 조건부 자기회귀 구조를 가정한다.
+
+
+```{r}
+ID.area.int <- dat$ID.area
+year.int    <- dat$year
+```
+
+
+```{r}
+formulaIII <- crime ~ 1 + f(ID.area, model="bym", graph = seoul.adj) +
+                          f(year, model="rw1") +    # RW of order1
+                          f(year1, model="iid") +   # phi_t
+                          f(year.int,model="iid", group=ID.area.int,
+                            control.group=list(model="besag",
+                            graph=seoul.adj))
+
+lcs       <- inla.make.lincombs(year = diag(3), year1 = diag(3))  # Linear Combination gamma_{t} + phi_{t}
+
+
+model.intIII     <- inla(formulaIII, family = "poisson", data = dat, E = E, # E = E or offset = log(E)
+                         lincomb = lcs, 
+                         control.predictor=list(compute=TRUE), # Compute the marginals of the model parameters
+                         control.compute = list(dic = TRUE))   # Compute some model choice criteria
+
+summary(model.intIII)
+```
+
+
+
+
+--------------
+
+#### **Mapping**
+
+
+##### **Interaction Effect**
+
+
+```{r}
+# Random Effect for spatial structure (ui+vi)
+del   <- model.intIII$marginals.random$year.int          # Extract the marginal posterior distribution for each element of the random effects
+exdel <- lapply(del,function(x) inla.emarginal(exp, x))  # The exponential transformation and calculate the posterior mean for each of them
+
+
+# Define the cutoff for zeta
+exdel.cutoff <- c(1.13,1.17,1.21,1.25,1.29,1.33,1.37,1.4)
+
+# Transform in categorical variable
+exdel.cat2 <- cut(unlist(exdel),breaks=exdel.cutoff,
+                 include.lowest=TRUE)
+
+maps.cat.del3 <- data.frame(ESRI_PK=dat.2019$ESRI_PK, del3.2017=exdel.cat2[1:25], 
+                            del3.2018=exdel.cat2[26:50], del3.2019=exdel.cat2[51:75])
+
+# For adding name of Seoul
+lbls <- as.character(seoul.map$SIG_ENG_NM)             # 자치구명
+spl  <- list('sp.text', coordinates(seoul.map), lbls, cex=.7)
+
+#Add the categorized zeta to the spatial polygon
+data.boroughs           <- attr(seoul.map, "data")
+attr(seoul.map, "data") <- merge(data.boroughs, maps.cat.del3,
+                                 by="ESRI_PK")
+
+
+# Map 
+spplot(obj=seoul.map, zcol= c("del3.2017", "del3.2018", "del3.2019"),
+       names.attr = c("2017", "2018", "2019"),       # Changes Names
+       sp.layout = spl,
+       col.regions=brewer.pal(7,"Blues"), as.table=TRUE)
+
+```
+
+- 강서구, 양천구, 도봉구, 서대문구는 시간이 흐름에 따라 위험이 증가하였다.
+- 노원구와 용산구는 시간이 흐름에 따라 위험이 감소하였다.
+- 은평구, 광진구는 위험이 감소하였다가 증가하였다.
+
+------
+
+### **Type IV**
+
+
+Type IV 상호작용은 구조화된 공간 효과 $u_{i}$ 와 구조화된 시간 효과 $\gamma_t$ 상호작용이다. 이 상호작용은 시간과 공간에 따라 완전히 달라지며 더 이상 독립적으로 분해할 수 없다는 것을 의미한다. 즉, 각 지역에 대한 시간 의존 구조는 더 이상 다른 모든 지역으로부터 독립적이지 않으며 이웃 지역의 시간 패턴에도 의존한다.
+
+
+```{r, eval=FALSE}
+f(area identifier,model="besag", graph, group=year identifier, control.group=list(model="rw1"))
+```
+
+
+```{r}
+ID.area.int <- dat$ID.area
+year.int    <- dat$year
+```
+
+
+```{r}
+formulaIV <- crime ~ 1 + f(ID.area, model="bym", graph = seoul.adj) +
+                          f(year, model="rw1") +    # RW of order1
+                          f(year1, model="iid") +   # phi_t
+                          f(ID.area.int,model="besag", graph=seoul.adj,
+                            group=year.int,
+                            control.group=list(model="rw1"))
+
+lcs       <- inla.make.lincombs(year = diag(3), year1 = diag(3))  # Linear Combination gamma_{t} + phi_{t}
+
+
+model.intIV     <- inla(formulaIV, family = "poisson", data = dat, E = E, # E = E or offset = log(E)
+                         lincomb = lcs, 
+                         control.predictor=list(compute=TRUE), # Compute the marginals of the model parameters
+                         control.compute = list(dic = TRUE))   # Compute some model choice criteria
+
+summary(model.intIV)
+```
+
+
+
+
+--------------
+
+#### **Mapping**
+
+
+##### **Interaction Effect**
+
+
+```{r}
+# Random Effect for spatial structure (ui+vi)
+del   <- model.intIV$marginals.random$ID.area.int        # Extract the marginal posterior distribution for each element of the random effects
+exdel <- lapply(del,function(x) inla.emarginal(exp, x))  # The exponential transformation and calculate the posterior mean for each of them
+
+
+# Define the cutoff for zeta
+exdel.cutoff <- c(0.5,0.9,1.3,1.7,2.1,2.5,2.9,3.4)
+
+# Transform in categorical variable
+exdel.cat3 <- cut(unlist(exdel),breaks=exdel.cutoff,
+                 include.lowest=TRUE)
+
+maps.cat.del4 <- data.frame(ESRI_PK=dat.2019$ESRI_PK, del4.2017=exdel.cat3[1:25], 
+                            del4.2018=exdel.cat3[26:50], del4.2019=exdel.cat3[51:75])
+
+# For adding name of Seoul
+lbls <- as.character(seoul.map$SIG_ENG_NM)             # 자치구명
+spl  <- list('sp.text', coordinates(seoul.map), lbls, cex=.7)
+
+#Add the categorized zeta to the spatial polygon
+data.boroughs           <- attr(seoul.map, "data")
+attr(seoul.map, "data") <- merge(data.boroughs, maps.cat.del4,
+                                 by="ESRI_PK")
+
+
+# Map 
+spplot(obj=seoul.map, zcol= c("del4.2017", "del4.2018", "del4.2019"),
+       names.attr = c("2017", "2018", "2019"),       # Changes Names
+       sp.layout = spl,
+       col.regions=brewer.pal(7,"Blues"), as.table=TRUE)
+
+```
+
+- 종로구와 중구는 시간에 상관없이 위험이 항상 높다.
+- 강남구는 2017년에 비해 2018년의 위험이 증가하였다.
+

@@ -1,0 +1,89 @@
+---
+title: "Cross Validation and Out-of-Bag"
+description: |
+  Cross Validation and Out-of-Bag 
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 09-22-2020
+preview: preview.png
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> 예제로 사용될 데이터는 R에 내장되어 있는 "SPAM" 데이터이다.  미국 캘리포니아 Pal Alto 지역에서 우체국, 개개인으로 부터 spam mail 수집하였는데, 여기서 spam mial은 수신자의 의사와 상관없이 전송되는 불필요한 광고성 e-mail이다. e-mail에 포함된  단어, 특수문자, 대문자 빈도로 spam mail 분류하였으며, 총 4601개의 관측치와 58개의 변수 데이터로 이루어져 있다.
+
+<center><img src="./image/그림1.png" width="700" height="500"></center>
+
+---------------
+
+# **1. 데이터 불러오기**
+
+
+```{r}
+pacman::p_load("caret",           # For train
+               "kernlab",         # For spam data
+               "dplyr",           # For glimpse
+               "microbenchmark",  # For microbenchmark 
+               "ggplot2"          # For ggplot
+               )
+
+
+
+data(spam)                        # Load Data
+
+glimpse(spam)                     # Structure of data
+```
+
+
+- 1 ~ 48열 : 이메일에 포함된 단어의 비율
+- 49 ~ 54열 : ‘;’, ‘(‘, ‘)’, ‘!’, ‘$’, ‘#’ 의 비율
+- 55 ~ 57열 : 연속되는 대문자 평균/길이/총계
+- 58열 : 스팸 여부(spam, nonspam)
+여기서 `type` 이 Target이다.
+
+
+# **2. 데이터 분할**
+
+```{r}
+set.seed(1235)
+DATA <- createDataPartition(y=spam$type, p=0.75, list=FALSE)   # Training Data : 75%
+TrD  <- spam[DATA,]                                            # Training Data
+TeD  <- spam[-DATA,]                                           # Test Data
+
+prop.table(table(TrD$type))                                    # Proportion Class of Training Data 
+prop.table(table(TeD$type))                                    # Proportion Class of Test Data 
+```
+
+
+# **3. 분할 기법 비교**
+
+
+```{r warning=FALSE}
+ctrl1 <- trainControl(method="LOOCV")                              # Leave-One-Out Cross Validaion
+system.time( modFit_loocv <- train(type ~., data=TrD, method="glm", metric="Accuracy", trControl = ctrl1) )
+modFit_loocv
+
+ctrl2 <- trainControl(method = "cv", number = 10)                  # 10-Fold Cross Validaion
+system.time( modFit_cv <- train(type ~., data=TrD, method="glm", metric="Accuracy", trControl = ctrl2) )
+modFit_cv
+
+ctrl3 <- trainControl(method="repeatedcv", number=10, repeats=5)   # 10-Fold Cross Validaion을 5번 반복
+system.time( modFit_repeatedcv <- train(type ~., data=TrD, method="glm", metric="Accuracy", trControl = ctrl3) )
+modFit_repeatedcv
+
+ctrl4 <- trainControl(method="boot", number=10)                    # 10번 반복 붓스트랩
+system.time( modFit_boot <- train(type ~., data=TrD, method="glm", metric="Accuracy", trControl = ctrl4) )
+modFit_boot
+
+```
+

@@ -1,0 +1,922 @@
+---
+title: "Discriminant Analysis with Various Examples"
+description: |
+  Description for Discriminant Analysis with Various Examples
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-06-21
+categories: Data Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+> Discriminant Analysis의 장점
+ 
+- 고차원의 데이터셋을 관리가 훨씬 쉬운 저차원으로 축소하여 예측을 수행한다.
+- 차원축소를 통해 얻은 판별점수는 다른 분류 예측 알고리듬의 예측 변수로 활용 가능하다.
+- 정규성을 만족할 경우, 로지스틱 회귀분석보다 더 효과적이다.
+    - 30% 정도 더 효과적인 성능을 발휘한다.
+- 데이터셋의 크기가 작을 때 유용하게 적용할 수 있다.    
+
+</br>
+
+> Discriminant Analysis의 단점
+
+- 연속형 예측 변수만 가능하다.
+ 
+</br>
+ 
+----------
+
+
+# **예제 1**
+
+- 판별분석을 수행하기 위해 사용되는 데이터는 이앤비플러스에서 출판한 책 **비즈니스 애널리틱스를 위한 데이터마이닝 (R Edition)**의 데이터 파일 중 "RidingMowers.csv"이다.
+- 이 데이터는 승차식 잔디깎기 기계를 생산하는 제조업자가 도시 가구들을 대상으로 기계를 구입할 가구와 구입하지 않을 가구로 분류하고자 할 때, 시험 표본으로 승차식 잔디깎기 기계를 소유하고 있는 가구들 중 12가구와 그렇지 않은 가구들 중 12가구를 무작위로 선정하여 얻은 자료이다.
+- 데이터에 포함되어 있는 변수는 다음과 같다.
+    1. Income : 소득 수준
+    2. Lot_Size : 정원 넓이
+    3. Ownership : 잔디 깎기 기계 소유 여부
+        - Owner : 소유
+        - Nonowner : 소유 X
+      
+-------------------
+
+## **1. 데이터 불러오기**
+        
+```{r}
+mowers <- read.csv("RidingMowers.csv")
+head(mowers)
+```
+
+
+---------------------
+
+## **2. 데이터 전처리**
+
+```{r}
+pacman::p_load("dplyr")
+
+## 예측변수 선택
+mowers.X <- mowers %>%
+  dplyr::select(1:2)                             
+
+head(mowers.X)
+
+## 표준화
+# mowers.X <- scale(mowers.X)
+```
+
+----------------------
+
+## **3. 공분산행렬의 동일성 검정**
+
+```{r}
+pacman::p_load("biotools")
+
+mowers.boxM <- boxM(mowers.X,                     # Features
+                    mowers$Ownership)             # Target
+mowers.boxM
+```
+
+`Result!` 가설 $H_0 : \boldsymbol{\Sigma}_{\text{Owner}}=\boldsymbol{\Sigma}_{\text{Nonowner}}$ vs $H_1 : \boldsymbol{\Sigma}_{\text{Owner}}\ne\boldsymbol{\Sigma}_{\text{Nonowner}}$에 대하여, 카이제곱 검정통계량 $\chi^2$ 값은 0.99346, $p$값은 0.8028이다. 이에 근거하여, 유의수준 5%에서 $p$값이 0.05보다 크기 때문에 귀무가설 $H_0$를 기각할 수 없다. 즉, 두 클래스의 공분산행렬이 동일하지 않다는 증거가 부족하다.
+
+-----------------------
+
+## **4. 선형판별분석(LDA)**
+
+```{r}
+# 함수 lda
+pacman::p_load("MASS")
+
+mowers.lda <- lda(Ownership ~ Income + Lot_Size,    # formula : 반응변수(클래스) ~ 예측변수
+                  # prior = c(1/2, 1/2),            # 사전확률
+                  data = mowers)               
+mowers.lda
+```
+
+`Result!` "Prior probabilities of groups"는 사전확률을 의미하며, 함수 `lda()`의 옵션 `prior`을 이용하여 직접 지정할 수 있다. 만약 옵션으로 따로 지정해주지 않는다면, 예제처럼 데이터에서 계산된 각 클래스의 비율이 사전확률로 지정된다. 즉, 데이터 "mowers"에서 잔디 깎기 기계 소유 집단과 그렇지 않은 집단의 비율은 각각 50%이다. "Groups means"는 판별변수들의 클래스별 평균을 의미한다. "Coefficients of linear discriminants"는 선형판별계수로 이 계수들을 이용하여 선형판별함수 $L(\boldsymbol{x})$를 표현하면 다음과 같다.
+
+$$
+\begin{align}
+0.0484(x_{\text{Income}}-\bar{x}_{\text{Income}})+0.3795(x_{\text{Lot_Size}}-\bar{x}_{\text{Lot_Size}}).
+\end{align}
+$$
+여기서, $\bar{x}_i$는 $i$번째 예측변수의 전체 평균을 의미한다.  
+선형판별계수들의 부호에 관심을 가지고 이를 해석해보면, Income과 Lot_Size가 클수록 $L(\boldsymbol{x})$가 커지며, 이는 잔디 깎기 기계를 소유할 확률이 커진다는 것을 의미한다. 반면, $L(\boldsymbol{x})$이 작을수록 잔디 깎기 기계를 소유하지 않을 확률이 커진다.
+
+-----------------------
+
+```{r}
+# 새로운 개체에 대한 클래스 예측
+pred.mowers <- predict(mowers.lda,                  # 함수 lda로부터 출력된 객체
+                       mowers)                      # 새로운 데이터
+pred.mowers
+```
+
+
+```{r}
+# 선형판별점수, 예측 확률, 예측 클래스
+pf <- cbind(mowers, pred.mowers$x, pred.mowers$posterior, pred.mowers$class)
+pf
+```
+
+----------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+mowers.ctbl1 <- table(mowers$Ownership,             # 실제 클래스
+                       pred.mowers$class)           # 예측 클래스
+mowers.ctbl1
+
+Desc(mowers.ctbl1,                                  # 도수분포표
+     digits = 4)
+```
+
+`Caution!` Package `"DescTools"`에서 제공하는 함수 `Desc()`를 이용하여 오분류표를 작성할 수 있다.  
+`Result!` 원래 "Nonowner"에 속하는 12개의 개체 중 10개(10/12=83.33%)는 제대로 분류되었으나 2개(2/12=16.67%)는 "Owner"로 잘못 분류되었다. 또한, 원래 "Owner"에 속하는 12개의 개체 중 1개(1/12=8.33%)는 "Nonowner"로 잘못 분류되었으나 11개(11/12=91.67%)는 "Owner"에 제대로 분류되었다. 유도된 선형판별함수에 대한 오류율은 (2+1)/24=12.5%이며, 정확도는 (10+11)/24=87.5%이다.
+
+-----------------------
+
+## **5. 이차판별분석(QDA)**
+
+```{r}
+# 이차판별분석
+pacman::p_load("MASS")
+
+mowers.qda <- qda(Ownership ~ Income + Lot_Size,    # formula : 반응변수(클래스) ~ 예측변수
+                  data = mowers)
+mowers.qda
+```
+
+`Caution!` 이차판별분석에서는 판별계수벡터를 출력하지 않는다.
+
+-------------------------
+
+```{r}
+# 새로운 개체에 대한 클래스 예측
+pred2.mowers <- predict(mowers.qda,               # 함수 qda로부터 출력된 객체
+                        mowers)                   # 새로운 데이터
+cbind(mowers, pred2.mowers$posterior, pred2.mowers$class)
+```
+
+`Caution!` 이차판별분석에서 함수 `predict()`는 예측 클래스와 각 클래스에 대한 사후확률 예측값만 출력한다.
+
+-------------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+mowers.ctbl2 <- table(mowers$Ownership,           # 실제 클래스
+                      pred2.mowers$class)         # 예측 클래스
+mowers.ctbl2
+
+Desc(mowers.ctbl2,                                # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 "Nonowner"에 속하는 12개의 개체 중 10개(10/12=83.33%)는 제대로 분류되었으나 2개(2/12=16.67%)는 "Owner"로 잘못 분류되었다. 또한, 원래 "Owner"에 속하는 12개의 개체 중 1개(1/12=8.33%)는 "Nonowner"로 잘못 분류되었으나 11개(11/12=91.67%)는 "Owner"에 제대로 분류되었다. 유도된 이차판별함수에 대한 오류율은 (2+1)/24=12.5%이며, 정확도는 (10+11)/24=87.5%이다.
+
+--------------------------------
+
+`Caution!` Package `"klaR"`에서 제공하는 함수 `partimat()`을 통해 판별분석의 분류 영역을 각 예측변수의 쌍에 대하여 표현할 수 있다.
+
+```{r}
+# 그래프적 표현
+pacman::p_load("klaR")
+
+mowers$Ownership <- as.factor(mowers$Ownership)
+
+# 선형판별함수
+partimat(Ownership ~ Income + Lot_Size,      
+         data = mowers,
+         method = "lda")
+
+# 이차판별함수
+partimat(Ownership ~ Income + Lot_Size,      
+         data = mowers,
+         method = "qda")
+
+```
+
+`Result!` 그래프를 통해 선형판별함수와 이차판별함수의 “선형”, “이차”라는 용어의 의미를 이해할 수 있다. 선형판별함수는 각 예측변수의 쌍에 대하여 "Nonowner" (N)와 "Owner" (O)는 선형(직선)으로 분류되었으며, 이차판별함수는 "Nonowner" (N)와 "Owner" (O)가 비선형으로 분류되었다. 또한, 각 집단에 대해 잘못 분류된 개체는 빨간색으로 표시되어 있다.
+
+--------------------------------
+
+## **6. 오분류율 계산**
+
+```{r}
+# 1. 재대입에 의한 오분류율 계산 
+pacman::p_load("MASS")
+
+mowers.lda <- lda(Ownership ~ Income + Lot_Size,    # formula : 반응변수(클래스) ~ 예측변수
+                  # prior = c(1/2, 1/2),            # 사전확률
+                  data = mowers)               
+
+## 예측
+pred <- predict(mowers.lda,                         # 함수 lda로부터 출력된 객체
+                mowers)                             # 판별함수를 유도하는 데 사용했던 데이터
+
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(mowers$Ownership,                     # 실제 클래스
+              pred$class)                           # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                          # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측 클래스
+                mowers$Ownership)                    # 실제 클래스
+```
+
+----------------------------------
+
+```{r}
+# 2. 표본분할에 의한 오분류율 계산
+## 표본 분할
+pacman::p_load("caret")
+
+set.seed(200)                                        # Seed 고정
+ind <- createDataPartition(mowers$Ownership,         # 반응변수 (클래스)
+                           p = .7,                   # 판별함수를 유도하는 데 사용되는 데이터 비율
+                           list = F)                 # 출력 결과를 List로 반환할 것인지 여부  
+
+trd <- mowers[ind,]                                  # 판별함수를 유도하는 데 사용되는 데이터
+ted <- mowers[-ind,]                                 # 오분류율 계산을 위해 사용되는 데이터  
+```
+
+`Caution!` Package `"caret"`에서 제공하는 함수 `createDataPartition()`은 반응변수의 클래스별 비율을 원본 데이터와 같게 유지하면서 판별함수를 유도하는 데 사용할 데이터의 인덱스를 추출한다. 
+
+```{r}
+pacman::p_load("MASS")
+
+mowers.lda <- lda(Ownership ~ Income + Lot_Size, 
+                  data = trd)
+
+## 예측
+pred <- predict(mowers.lda,                          # 함수 lda로부터 출력된 객체
+                ted)                                 # 새로운 데이터
+
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(ted$Ownership,                         # 실제 클래스
+              pred$class)                            # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                           # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측 클래스
+                ted$Ownership)                       # 실제 클래스
+```
+
+----------------------------------
+
+```{r}
+# 3. 교차타당성에 의한 오분류율 계산
+pacman::p_load("MASS")
+
+mowers.lda <- lda(Ownership ~ Income + Lot_Size, 
+                  data = mowers,
+                  CV = TRUE)
+```
+
+`Caution!` 함수 `lda()`의 옵션 `CV = TRUE`을 지정하면 교차타당성에 의한 오분류율을 계산할 수 있다.
+
+```{r}
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(mowers$Ownership,                     # 실제 클래스
+              mowers.lda$class)                     # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                           # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(mowers.lda$class,                    # 예측 클래스
+                mowers$Ownership)                    # 실제 클래스
+```
+
+--------------------
+
+# **예제 2**
+
+- 판별분석을 수행하기 위해 사용되는 데이터는 [자유아카데미](http://www.freeaca.com/new/library/BoardFileList.aspx?page=1&sword=%eb%8b%a4%eb%b3%80%eb%9f%89&stype=title&area=2)에서 출판한 책 **R을 활용한 다변량 자료분석 방법론**의 데이터 파일 중 "finance.csv"이다.
+- 이 데이터는 금융거래의 거래인에 관한 자료로서, 변수들은 다음과 같다.
+    1. $x_1$ : 총부채 대비 현금 유출입
+    2. $x_2$ : 총자산 대비 순이익
+    3. $x_3$ : 채무 대비 자산
+    4. $x_4$ : 순매출 대비 자산
+    5. $y$ : "1 = 파산 기업", "2 = 건전 기업"
+- 위와 같은 재무지표 데이터를 이용하여 거래인의 신용등급을 판별하고자 한다.
+
+-------------------
+
+## **1. 데이터 불러오기**
+        
+```{r}
+finance <- read.csv("finance.csv")
+head(finance)
+```
+
+
+---------------------
+
+## **2. 데이터 전처리**
+
+```{r}
+pacman::p_load("dplyr")
+
+## 예측변수 선택 
+finance.X <- finance %>%
+  dplyr::select(2:5)                            
+
+head(finance.X)
+
+## 표준화
+# finance.X <- scale(finance.X)
+```
+
+----------------------
+
+## **3. 공분산행렬의 동일성 검정**
+
+```{r}
+pacman::p_load("biotools")
+
+finance.boxM <- boxM(finance.X,                   # Features
+                     finance$y)                   # Target
+finance.boxM
+```
+
+`Result!` 가설 $H_0 : \boldsymbol{\Sigma}_1=\boldsymbol{\Sigma}_2$ vs $H_1 : \boldsymbol{\Sigma}_1\ne\boldsymbol{\Sigma}_2$에 대하여, 카이제곱 검정통계량 $\chi^2$ 값은 64.869, $p$값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$값이 0.05보다 작기 때문에 귀무가설 $H_0$를 기각할 수 있다. 즉, 두 클래스의 공분산행렬은 동일하지 않다.
+
+-----------------------
+
+## **4. 선형판별분석(LDA)**
+
+```{r}
+# 함수 lda
+pacman::p_load("MASS")
+
+finance.lda <- lda(y ~ x1 + x2 + x3 + x4,           # formula : 반응변수(클래스) ~ 예측변수
+                   # prior = c(1/2, 1/2),           # 사전확률
+                   data = finance)               
+finance.lda
+```
+
+`Result!` "Prior probabilities of groups"는 사전확률을 의미하며, 함수 `lda()`의 옵션 `prior`을 이용하여 직접 지정할 수 있다. 만약 옵션으로 따로 지정해주지 않는다면, 예제처럼 데이터에서 계산된 각 클래스의 비율이 사전확률로 지정된다. 즉, 데이터 "finance"에서 파산 기업($y=1$)의 비율은 46%, 건전 기업($y=2$)의 비율은 54%이다. "Groups means"는 판별변수들의 클래스별 평균을 의미한다. 예를 들어, 변수 $x_4$(순매출 대비 자산)은 두 클래스의 평균이 0.438과 0.428로서 큰 차이가 없으므로, 이 변수는 판별에 기여하는 정도가 작을 것임을 짐작할 수 있다. "Coefficients of linear discriminants"는 선형판별계수로 이 계수들을 이용하여 선형판별함수 $L(\boldsymbol{x})$를 표현하면 다음과 같다.
+
+$$
+\begin{align}
+1.002(x_1-\bar{x}_1)+3.999(x_2-\bar{x}_2)+0.845(x_3-\bar{x}_3)-1.015(x_4-\bar{x}_4).
+\end{align}
+$$
+여기서, $\bar{x}_i$는 $i$번째 예측변수의 전체 평균을 의미한다.  
+선형판별계수들의 부호에 관심을 가지고 이를 해석해보면, $x_1$(총부채 대비 현금 유출입), $x_2$(총자산 대비 순이익), $x_3$(채무 대비 자산)이 클수록 $L(\boldsymbol{x})$ 값이 커지므로 파산 기업($y=1$)에 비해 건전 기업($y=2$)에 속할 확률의 추정치가 커지며, 반면에 $x_4$(순매출 대비 자산)이 클수록 $L(\boldsymbol{x})$ 값이 작아지므로 건전 기업($y=2$)에 속할 확률의 추정치가 작아진다. 
+
+-----------------------
+
+```{r}
+# 새로운 개체에 대한 클래스 예측
+pred.finance <- predict(finance.lda,                # 함수 lda로부터 출력된 객체
+                        finance)                    # 새로운 데이터
+pred.finance
+```
+
+
+```{r}
+# 선형판별점수, 예측 확률, 예측 클래스
+pf <- cbind(finance, pred.finance$x, pred.finance$posterior, pred.finance$class)
+pf
+```
+
+----------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+finance.ctbl1 <- table(finance$y,                   # 실제 클래스
+                       pred.finance$class)          # 예측 클래스
+finance.ctbl1
+
+Desc(finance.ctbl1,                                 # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 집단 1에 속하는 21개의 개체 중 18개(18/21=85.7%)는 집단 1에 제대로 분류되었으나 3개(3/21=14.3%)는 집단 2로 잘못 분류되었다. 또한, 원래 집단 2에 속하는 25개의 개체 중 1개(1/25=4%)는 집단 1로 잘못 분류되었으나 24개(24/25=96%)는 집단 2에 제대로 분류되었다. 유도된 선형판별함수에 대한 오류율은 (3+1)/46=8.7%이며, 정확도는 (18+24)/46=91.3%이다.
+
+-----------------------
+
+## **5. 이차판별분석(QDA)**
+
+```{r}
+# 이차판별분석
+pacman::p_load("MASS")
+
+finance.qda <- qda(y ~ x1 + x2 + x3 + x4,           # formula : 반응변수(클래스) ~ 예측변수
+                   data = finance)
+finance.qda
+```
+
+`Caution!` 이차판별분석에서는 판별계수벡터를 출력하지 않는다.
+
+-------------------------
+
+```{r}
+# 새로운 개체에 대한 클래스 예측
+pred2.finance <- predict(finance.qda,               # 함수 qda로부터 출력된 객체
+                         finance)                   # 새로운 데이터
+cbind(finance, pred2.finance$posterior, pred2.finance$class)
+```
+
+`Caution!` 이차판별분석에서 함수 `predict()`는 예측 클래스와 각 클래스에 대한 사후확률 예측값만 출력한다.
+
+-------------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+finance.ctbl2 <- table(finance$y,                   # 실제 클래스
+                       pred2.finance$class)         # 예측 클래스
+finance.ctbl2
+
+Desc(finance.ctbl2,                                 # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 집단 1에 속하는 21개의 개체 중 19개(19/21=90.5%)는 집단 1에 제대로 분류되었으나 2개(5/21=9.5%)는 집단 2로 잘못 분류되었다. 또한, 원래 집단 2에 속하는 25개의 개체 중 1개(1/25=4%)는 집단 1로 잘못 분류되었으나 24개(24/25=96%)는 집단 2에 제대로 분류되었다. 유도된 이차판별함수에 대한 오류율은 (2+1)/46=6.5%이며, 정확도는 (19+24)/46=93.5%이다. 
+
+--------------------------------
+
+`Caution!` Package `"klaR"`에서 제공하는 함수 `partimat()`을 통해 판별분석의 분류 영역을 각 예측변수의 쌍에 대하여 표현할 수 있다.
+
+```{r}
+# 그래프적 표현
+pacman::p_load("klaR")
+
+finance$y <- as.factor(finance$y)
+
+# 선형판별함수
+partimat(y ~ x1 + x2 + x3 + x4,      
+         data = finance,
+         method = "lda")
+
+# 이차판별함수
+partimat(y ~ x1 + x2 + x3 + x4,
+         data = finance,
+         method = "qda")
+```
+
+--------------------------------
+
+## **6. 오분류율 계산**
+
+```{r}
+# 1. 재대입에 의한 오분류율 계산 
+pacman::p_load("MASS")
+
+finance.lda <- lda(y ~ x1 + x2 + x3 + x4,           # formula : 반응변수(클래스) ~ 예측변수
+                   # prior = c(1/2, 1/2),           # 사전확률
+                   data = finance)                   
+
+## 예측
+pred <- predict(finance.lda,                        # 함수 lda로부터 출력된 객체
+                finance)                            # 판별함수를 유도하는 데 사용했던 데이터
+
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(finance$y,                            # 실제 클래스
+              pred$class)                           # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                          # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측 클래스
+                finance$y)                           # 실제 클래스
+```
+
+----------------------------------
+
+```{r}
+# 2. 표본분할에 의한 오분류율 계산
+## 표본 분할
+pacman::p_load("caret")
+
+set.seed(200)                                        # Seed 고정
+ind <- createDataPartition(finance$y,                # 반응변수 (클래스)
+                           p = .7,                   # 판별함수를 유도하는 데 사용되는 데이터 비율
+                           list = F)                 # 출력 결과를 List로 반환할 것인지 여부  
+
+trd <- finance[ind,]                                 # 판별함수를 유도하는 데 사용되는 데이터
+ted <- finance[-ind,]                                # 오분류율 계산을 위해 사용되는 데이터 
+```
+
+
+```{r}
+pacman::p_load("MASS")
+
+finance.lda <- lda(y ~ x1 + x2 + x3 + x4, 
+                   data = trd)
+
+## 예측
+pred <- predict(finance.lda,                         # 함수 lda로부터 출력된 객체
+                ted)                                 # 새로운 데이터
+
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(ted$y,                                 # 실제 클래스
+              pred$class)                            # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                           # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측 클래스
+                ted$y)                               # 실제 클래스
+```
+
+----------------------------------
+
+```{r}
+# 3. 교차타당성에 의한 오분류율 계산
+pacman::p_load("MASS")
+
+finance.lda <- lda(y ~ x1 + x2 + x3 + x4, 
+                   data = finance,
+                   CV = TRUE)
+```
+
+```{r}
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(finance$y,                             # 실제 클래스
+              finance.lda$class)                     # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                           # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(finance.lda$class,                   # 예측 클래스
+                finance$y)                           # 실제 클래스
+
+```
+
+--------------------
+
+# **예제 3**
+
+- 판별분석을 수행하기 위해 사용되는 데이터는 Package `"ISLR"`에서 제공하는 데이터 `Smarket`이다.
+- 이 데이터는 2001년부터 2005년까지 1,250일 동안의 S&P 주가지수에 대한 수익률에 관한 자료로서 변수는 다음과 같다. 
+    1. Year : 연도
+    2. Lag1 : 하루 전의 수익률
+    3. Lag2 : 2일 전의 수익률
+    4. Lag3 : 3일 전의 수익률
+    5. Lag4 : 4일 전의 수익률
+    6. Lag5 : 5일 전의 수익률
+    7. Volume : 주식 거래량
+    8. Today : 오늘 수익률
+    9. Direction : 오늘 수익률의 증감
+
+-------------------
+
+## **1. 데이터 불러오기**
+        
+```{r}
+pacman::p_load("ISLR")
+
+data(Smarket)
+
+smarket <- Smarket
+head(smarket)
+```
+
+
+---------------------
+
+## **2. 데이터 전처리**
+
+```{r}
+pacman::p_load("dplyr")
+
+## 예측변수 선택 
+smarket.X <- smarket %>%
+  dplyr::select(2:3)                           
+
+head(smarket.X)
+
+## 표준화
+# smarket.X <- scale(smarket.X)
+```
+
+----------------------
+
+## **3. 공분산행렬의 동일성 검정**
+
+```{r}
+pacman::p_load("biotools")
+
+smarket.boxM <- boxM(smarket.X,                   # Features
+                     smarket$Direction)           # Target
+smarket.boxM
+```
+
+`Result!` 가설 $H_0 : \boldsymbol{\Sigma}_{\text{Up}}=\boldsymbol{\Sigma}_\text{Down}$ vs $H_1 : \boldsymbol{\Sigma}_\text{Up}\ne\boldsymbol{\Sigma}_\text{Down}$에 대하여, 카이제곱 검정통계량 $\chi^2$ 값은 0.8415, $p$값은 0.8395이다. 이에 근거하여, 유의수준 5%에서 $p$값이 0.05보다 크기 때문에 귀무가설 $H_0$를 기각할 수 없다. 즉, 두 클래스의 공분산행렬이 동일하지 않다는 증거가 부족하다.
+
+-----------------------
+
+## **4. 선형판별분석(LDA)**
+
+```{r}
+# 함수 lda
+pacman::p_load("MASS")
+
+smarket.lda <- lda(Direction ~ Lag1 + Lag2,         # formula : 반응변수(클래스) ~ 예측변수
+                   # prior = c(1/2, 1/2),           # 사전확률
+                   data = smarket)               
+smarket.lda
+```
+
+`Result!` "Prior probabilities of groups"는 사전확률을 의미하며, 함수 `lda()`의 옵션 `prior`을 이용하여 직접 지정할 수 있다. 만약 옵션으로 따로 지정해주지 않는다면, 예제처럼 데이터에서 계산된 각 클래스의 비율이 사전확률로 지정된다. 즉, 데이터 "smarket"에서 "Down"과 "Up"의 비율은 각각 48%와 52%이다. "Groups means"는 판별변수들의 클래스별 평균을 의미한다. "Coefficients of linear discriminants"는 선형판별계수로 이 계수들을 이용하여 선형판별함수 $L(\boldsymbol{x})$를 표현하면 다음과 같다.
+
+$$
+\begin{align}
+-0.757(x_{\text{Lag1}}-\bar{x}_{\text{Lag1}})-0.471(x_{\text{Lag2}}-\bar{x}_{\text{Lag2}}).
+\end{align}
+$$
+여기서, $\bar{x}_i$는 $i$번째 예측변수의 전체 평균을 의미한다.  
+선형판별계수들의 부호에 관심을 가지고 이를 해석해보면, 하루 전의 수익률 $x_{\text{Lag1}}$과 2일 전의 수익률 $x_{\text{Lag2}}$이 클수록 $L(\boldsymbol{x})$은 작아지므로 오늘의 수익률은 감소("Down")일 확률이 커진다. 반면, $L(\boldsymbol{x})$이 클수록 오늘의 수익률은 증가("Up")일 확률이 커진다.
+
+-----------------------
+
+```{r}
+# 새로운 개체에 대한 클래스 예측
+pred.smarket <- predict(smarket.lda,                # 함수 lda로부터 출력된 객체
+                        smarket)                    # 새로운 데이터
+pred.smarket
+```
+
+
+```{r}
+# 선형판별점수, 예측 확률, 예측 클래스
+pf <- cbind(smarket, pred.smarket$x, pred.smarket$posterior, pred.smarket$class)
+pf
+```
+
+----------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+smarket.ctbl1 <- table(smarket$Direction,           # 실제 클래스
+                       pred.smarket$class)          # 예측 클래스
+smarket.ctbl1
+
+Desc(smarket.ctbl1,                                 # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 "Down"에 속하는 602개의 개체 중 114개(114/602=18.9%)는 제대로 분류되었으나 488개(488/602=81.1%)는 잘못 분류되었다. 또한, 원래 "Up"에 속하는 648개의 개체 중 546개(546/648=84.3%)는 제대로 분류되었으나 102개(102/648=15.7%)는 잘못 분류되었다. 유도된 선형판별함수에 대한 오류율은 (488+102)/1250=47.2%이며, 정확도는 (114+546)/1250=52.8%이다.
+
+-----------------------
+
+## **5. 이차판별분석(QDA)**
+
+```{r}
+# 이차판별분석
+pacman::p_load("MASS")
+
+smarket.qda <- qda(Direction ~ Lag1 + Lag2,         # formula : 반응변수(클래스) ~ 예측변수
+                   data = smarket)
+smarket.qda
+```
+
+`Caution!` 이차판별분석에서는 판별계수벡터를 출력하지 않는다.
+
+-------------------------
+
+```{r}
+# 새로운 개체에 대한 클래스 예측
+pred2.smarket <- predict(smarket.qda,               # 함수 qda로부터 출력된 객체
+                         smarket)                   # 새로운 데이터
+cbind(smarket, pred2.smarket$posterior, pred2.smarket$class)
+```
+
+`Caution!` 이차판별분석에서 함수 `predict()`는 예측 클래스와 각 클래스에 대한 사후확률 예측값만 출력한다.
+
+-------------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+smarket.ctbl2 <- table(smarket$Direction,           # 실제 클래스
+                       pred2.smarket$class)         # 예측 클래스
+smarket.ctbl2
+
+Desc(smarket.ctbl2,                                 # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 "Down"에 속하는 602개의 개체 중 109개(109/602=18.1%)는 제대로 분류되었으나 493개(493/602=81.9%)는 잘못 분류되었다. 또한, 원래 "Up"에 속하는 648개의 개체 중 554개(554/648=85.5%)는 제대로 분류되었으나 94개(94/648=14.5%)는 잘못 분류되었다. 유도된 이차판별함수에 대한 오류율은 (493+94)/1250=47%이며, 정확도는 (109+554)/1250=53%이다.
+
+
+--------------------------------
+
+`Caution!` Package `"klaR"`에서 제공하는 함수 `partimat()`을 통해 판별분석의 분류 영역을 각 예측변수의 쌍에 대하여 표현할 수 있다.
+
+```{r}
+# 그래프적 표현
+pacman::p_load("klaR")
+
+smarket$Direction <- as.factor(smarket$Direction)
+
+# 선형판별함수
+partimat(Direction ~ Lag1 + Lag2,      
+         data = smarket,
+         method = "lda")
+
+# 이차판별함수
+partimat(Direction ~ Lag1 + Lag2,
+         data = smarket,
+         method = "qda")
+```
+
+--------------------------------
+
+## **6. 오분류율 계산**
+
+```{r}
+# 1. 재대입에 의한 오분류율 계산 
+pacman::p_load("MASS")
+
+smarket.lda <- lda(Direction ~ Lag1 + Lag2,         # formula : 반응변수(클래스) ~ 예측변수
+                   # prior = c(1/2, 1/2),           # 사전확률
+                   data = smarket)                   
+
+## 예측
+pred <- predict(smarket.lda,                        # 함수 lda로부터 출력된 객체
+                smarket)                            # 판별함수를 유도하는 데 사용했던 데이터
+
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(smarket$Direction,                    # 실제 클래스
+              pred$class)                           # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                          # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측 클래스
+                smarket$Direction)                   # 실제 클래스
+```
+
+----------------------------------
+
+```{r}
+# 2. 표본분할에 의한 오분류율 계산
+## 표본 분할
+pacman::p_load("caret")
+
+set.seed(200)                                        # Seed 고정
+ind <- createDataPartition(smarket$Direction,        # 반응변수 (클래스)
+                           p = .7,                   # 판별함수를 유도하는 데 사용되는 데이터 비율
+                           list = F)                 # 출력 결과를 List로 반환할 것인지 여부  
+
+trd <- smarket[ind,]                                 # 판별함수를 유도하는 데 사용되는 데이터
+ted <- smarket[-ind,]                                # 오분류율 계산을 위해 사용되는 데이터 
+```
+
+
+```{r}
+pacman::p_load("MASS")
+
+smarket.lda <- lda(Direction ~ Lag1 + Lag2,
+                   data = trd)
+
+## 예측
+pred <- predict(smarket.lda,                         # 함수 lda로부터 출력된 객체
+                ted)                                 # 새로운 데이터
+
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(ted$Direction,                         # 실제 클래스
+              pred$class)                            # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                           # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측 클래스
+                ted$Direction)                       # 실제 클래스
+```
+
+----------------------------------
+
+```{r}
+# 3. 교차타당성에 의한 오분류율 계산
+pacman::p_load("MASS")
+
+smarket.lda <- lda(Direction ~ Lag1 + Lag2, 
+                   data = smarket,
+                   CV = TRUE)
+```
+
+```{r}
+## 오분류율 계산
+## 함수 table()
+ctbl <- table(smarket$Direction,                     # 실제 클래스
+              smarket.lda$class)                     # 예측 클래스
+ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(ctbl,                                           # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(smarket.lda$class,                   # 예측 클래스
+                smarket$Direction)                   # 실제 클래스
+
+```

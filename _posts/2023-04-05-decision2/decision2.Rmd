@@ -1,0 +1,357 @@
+---
+title: "Decision Tree using Package caret"
+description: |
+  Description for Decision Tree using Package caret
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-04-05
+preview: preview.PNG
+categories: Data Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+
+> Tree-based Algorithm
+ 
+- 범주형 예측 변수와 연속형 예측 변수 모두 적용이 가능하다.
+- 예측 변수에 대한 분포 가정이 필요없다.
+- 다른 척도를 가지는 연속형 예측 변수들에 대해 별도의 변환과정 없이 적용가능하다. 
+    - 표준화/정규화 수행 X
+
+<br />
+ 
+ > 실습 자료 : 유니버셜 은행의 고객 2,500명에 대한 자료(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이며, 총 13개의 변수를 포함하고 있다. 이 자료에서 **Target**은 `Personal Loan`이다.
+
+<center>![](./image/그림1.png)</center>
+
+<br />
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+<br />
+
+----------
+
+# **1. 데이터 불러오기**
+
+```{r, eval=F}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr",
+               "ggplot2", "GGally",
+               "caret",
+               "rattle", "rpart.plot",                                  # For fancyRpartPlot
+               "visNetwork", "sparkline",                               # For visTree
+               "doParallel", "parallel")                                # For 병렬 처리
+
+registerDoParallel(cores=detectCores())                                 # 사용할 Core 개수 지정
+
+UB <- fread("../Universal Bank_Main.csv")                               # 데이터 불러오기
+
+UB %>%
+  as_tibble
+
+```
+
+```{r, echo=F}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr",
+               "ggplot2", "GGally",
+               "caret",
+               "rattle", "rpart.plot",                                  # For fancyRpartPlot
+               "visNetwork", "sparkline",                               # For visTree
+               "doParallel", "parallel")                                # For 병렬 처리
+
+registerDoParallel(cores=detectCores())                                 # 사용할 Core 개수 지정
+
+UB <- fread(paste(getwd(), "Universal Bank_Main.csv", sep = "/"))       # 데이터 불러오기
+
+UB %>%
+  as_tibble
+
+```
+
+----------
+
+# **2. 데이터 전처리**
+```{r}
+UB %<>%
+  data.frame() %>%                                                      # Data Frame 형태로 변환 
+  mutate(Personal.Loan = ifelse(Personal.Loan == 1, "yes", "no")) %>%   # Target을 문자형 변수로 변환
+  select(-1)                                                            # ID 변수 제거
+
+# Convert to Factor
+fac.col <- c("Family", "Education", "Securities.Account", 
+             "CD.Account", "Online", "CreditCard",
+             # Target
+             "Personal.Loan")
+
+UB <- UB %>% 
+  mutate_at(fac.col, as.factor)                                         # 범주형으로 변환
+
+glimpse(UB)                                                             # 데이터 구조 확인
+```
+
+----------
+
+# **3. 데이터 탐색**
+
+```{r}
+ggpairs(UB,                                           
+        columns = c("Age", "Experience", "Income",        # 수치형 예측 변수
+                    "ZIP.Code", "CCAvg", "Mortgage"),                            
+        aes(colour = Personal.Loan)) +                    # Target의 범주에 따라 색깔을 다르게 표현
+  theme_bw()
+
+ggpairs(UB,                                           
+        columns = c("Age", "Experience", "Income",        # 수치형 예측 변수
+                    "ZIP.Code", "CCAvg", "Mortgage"), 
+        aes(colour = Personal.Loan), alpha = 0.8) +       # Target의 범주에 따라 색깔을 다르게 표현
+  scale_colour_manual(values = c("#00798c", "#d1495b")) + # 특정 색깔 지정
+  scale_fill_manual(values = c("#00798c", "#d1495b")) +   # 특정 색깔 지정
+  theme_bw()
+
+ggpairs(UB,                                           
+        columns = c("Age", "Income",                      # 수치형 예측 변수
+                    "Family", "Education"),               # 범주형 예측 변수
+        aes(colour = Personal.Loan, alpha = 0.8)) +       # Target의 범주에 따라 색깔을 다르게 표현
+  scale_colour_manual(values = c("#E69F00", "#56B4E9")) + # 특정 색깔 지정
+  scale_fill_manual(values = c("#E69F00", "#56B4E9")) +   # 특정 색깔 지정
+  theme_bw()
+```
+
+----------
+
+# **4. 데이터 분할**
+
+```{r}
+# Partition (Training Dataset : Test Dataset = 7:3)
+y      <- UB$Personal.Loan                            # Target
+ 
+set.seed(200)
+ind    <- createDataPartition(y, p = 0.7, list = T)   # Index를 이용하여 7:3으로 분할
+UB.trd <- UB[ind$Resample1,]                          # Training Dataset
+UB.ted <- UB[-ind$Resample1,]                         # Test Dataset
+```
+
+----------
+
+# **5. 모형 훈련**
+
+Package `"caret"`은 통합 API를 통해 R로 기계 학습을 실행할 수 있는 매우 실용적인 방법을 제공한다. Package `"caret"`에서는 초모수의 최적의 조합을 찾는 방법으로 그리드 검색(Grid Search), 랜덤 검색(Random Search), 직접 탐색 범위 설정이 있다. 여기서는 초모수 `cp` (Complexity Parameter)의 최적값을 찾기 위해 그리드 검색을 수행하였고, 이를 기반으로 직접 탐색 범위를 설정하였다. 아래는 그리드 검색을 수행하였을 때 결과이다. 
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 5,  # 5-Fold Cross Validation (5-Fold CV)
+                           allowParallel = TRUE)       # 병렬 처리
+
+set.seed(100)                                          # For CV
+rtree.caret <- train(x = UB.trd[,-9],                  # Training Dataset including Only 예측 변수
+                     y = UB.trd[,"Personal.Loan"],     # Training Dataset including Only Target
+                     method = "rpart", 
+                     trControl = fitControl)   
+```
+
+`Caution!` Package `"caret"`에서는 함수 `rpart()`의 옵션 `xval` = 0이며, `cp`의 최적값을 이용하여 최종 모형을 훈련하기 때문에 가지치기를 수행할 필요가 없다. 게다가, Package `"caret"`을 통해 `"rpart"`를 수행하는 경우, 함수 `train(Target ~ 예측 변수, data)`를 사용하면 범주형 예측 변수는 자동적으로 One-hot Encoding 변환이 된다. 범주형 예측 변수에 대해 One-hot Encoding 변환을 수행하고 싶지 않다면 함수 `train(x = 예측 변수만 포함하는 데이터셋, y = Target만 포함하는 데이터셋)`를 사용한다.  
+
+```{r}
+rtree.caret
+plot(rtree.caret)                                      # Plot
+```
+
+`Result!` 랜덤하게 결정된 3개의 `cp` 값에 대한 정확도를 보여주며, `cp` = 0.01944444일 때 정확도가 가장 높은 것을 알 수 있다. 따라서 그리드 검색을 통해 찾은 최적의 초모수 값 0.01944444 근처의 값들을 탐색 범위로 설정하여 훈련을 다시 수행할 수 있다.
+
+```{r}
+customGrid <- expand.grid(cp = seq(0.01, 0.07, by = 0.001))   # cp의 탐색 범위 
+
+set.seed(100)                                                 # For CV
+rtree.grid.caret <- train(x = UB.trd[,-9],                    # Training Dataset including Only 예측 변수
+                          y = UB.trd[,"Personal.Loan"],       # Training Dataset including Only Target
+                          tuneGrid = customGrid,
+                          method = "rpart", 
+                          trControl = fitControl)
+rtree.grid.caret
+```
+
+```{r}
+plot(rtree.grid.caret)                                  # Plot
+
+rtree.grid.caret$bestTune                               # cp의 최적값
+```
+
+`Result!` `cp` = 0.055일 때 정확도가 가장 높다는 것을 알 수 있으며, `cp` = 0.055를 가지는 모형을 최적의 훈련된 모형으로 선택한다.
+
+----------
+
+# **6. Tree Plot**
+
+## **6-1. "fancyRpartPlot"**
+```{r}
+fancyRpartPlot(rtree.grid.caret$finalModel)    # Plot
+```
+
+
+## **6-2. "visTree"**
+
+```{r}
+visTree(rtree.grid.caret$finalModel)           # Network-based Plot 
+```
+
+----------
+
+# **7. 모형 평가**
+
+`Caution!` 모형 평가를 위해 `Test Dataset`에 대한 `예측 class/확률` 이 필요하며, 함수 `predict()`를 이용하여 생성한다. 
+
+```{r}
+# 예측 class 생성
+rtree.grid.caret.pred <- predict(rtree.grid.caret, 
+                                 newdata = UB.ted[,-9])   # Test Dataset including Only 예측 변수                      
+
+rtree.grid.caret.pred %>%
+  as_tibble
+```
+
+<br />
+
+## **7-1. ConfusionMatrix**
+
+```{r}
+CM   <- caret::confusionMatrix(rtree.grid.caret.pred, UB.ted$Personal.Loan, 
+                               positive = "yes")          # confusionMatrix(예측 class, 실제 class, positive = "관심 class")
+CM
+
+```
+
+<br />
+
+## **7-2. ROC 곡선**
+
+```{r}
+# 예측 확률 생성 
+test.rtree.prob <- predict(rtree.grid.caret,
+                           newdata = UB.ted[,-9],         # Test Dataset including Only 예측 변수 
+                           type = "prob")                 # 예측 확률 생성 
+
+test.rtree.prob %>%
+  as_tibble
+
+```
+
+```{r}
+test.rtree.prob <- test.rtree.prob[,2]                    # "Personal.Loan = yes"에 대한 예측 확률
+
+ac  <- UB.ted$Personal.Loan                               # Test Dataset의 실제 class 
+pp  <- as.numeric(test.rtree.prob)                        # 예측 확률을 수치형으로 변환
+```
+
+
+### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+rtree.roc  <- roc(ac, pp, plot = T, col = "gray")         # roc(실제 class, 예측 확률)
+auc        <- round(auc(rtree.roc), 3)
+legend("bottomright", legend = auc, bty = "n")
+
+```
+
+`Caution!` Package `"pROC"`를 통해 출력한 ROC 곡선은 다양한 함수를 이용해서 그래프를 수정할 수 있다.
+
+```{r}
+# 함수 plot.roc() 이용
+plot.roc(rtree.roc,   
+         col="gray",                                      # Line Color
+         print.auc = TRUE,                                # AUC 출력 여부
+         print.auc.col = "red",                           # AUC 글씨 색깔
+         print.thres = TRUE,                              # Cutoff Value 출력 여부
+         print.thres.pch = 19,                            # Cutoff Value를 표시하는 도형 모양
+         print.thres.col = "red",                         # Cutoff Value를 표시하는 도형의 색깔
+         auc.polygon = TRUE,                              # 곡선 아래 면적에 대한 여부
+         auc.polygon.col = "gray90")                      # 곡선 아래 면적의 색깔
+```
+
+
+```{r}
+# 함수 ggroc() 이용
+ggroc(rtree.roc) +
+annotate(geom = "text", x = 0.9, y = 1.0,
+label = paste("AUC = ", auc),
+size = 5,
+color="red") +
+theme_bw()
+```
+
+
+### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("Epi")       
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot = "ROC")                                 # ROC(예측 확률, 실제 class)  
+
+```
+
+
+### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")
+
+rtree.pred <- prediction(pp, ac)                          # prediction(예측 확률, 실제 class)  
+
+rtree.perf <- performance(rtree.pred, "tpr", "fpr")       # performance(, "민감도", "1-특이도")                      
+plot(rtree.perf, col = "gray")                            # ROC Curve
+
+perf.auc   <- performance(rtree.pred, "auc")              # AUC
+auc        <- attributes(perf.auc)$y.values
+legend("bottomright", legend = auc, bty = "n")
+```
+
+<br />
+
+## **7-3. 향상 차트**
+
+### **1) Package "ROCR"**
+
+```{r}
+rtree.perf <- performance(rtree.pred, "lift", "rpp") 	    # Lift Chart
+plot(rtree.perf, main = "lift curve", 
+     colorize = T,                                          # Coloring according to cutoff
+     lwd = 2)	
+
+```
+
+
+```{r, eval = F, echo=F, include=FALSE}
+#### **2) Package "lift"**
+
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)                 # Target을 수치형으로 변환
+
+plotLift(test.rtree.prob, ac.numeric, cumulative = T, n.buckets = 24) # plotLift(7-2에서 생성한 예측 확률, 실제 class)
+TopDecileLift(test.rtree.prob, UB.ted$Personal.Loan)		              # Top 10%의 향상도 출력
+
+```
+

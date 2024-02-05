@@ -1,0 +1,844 @@
+---
+title: "Significance Tests"
+description: |
+   Significance Tests of Multicariate Data
+author:
+  - name: Yeongeun Jeon
+date: 10-01-2022
+categories: Multivariate Data Analysis
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+- **참고**
+    - **R 응용 다변량분석, 나종화 저**
+    - **SAS를 이용한 다변량 통계 분석, 김재희 저**
+
+
+# **1. 다변량 정규분포**
+
+- 일변량 정규분포를 다차원으로 확장한 다변량 정규분포(Multivariate Normal Distribution)는 다변량 분석 절차에서 중요한 역할을 한다.
+- 실제로 관측된 데이터가 다변량 정규분포를 따르지 않더라도, 관측 개수(개체 수)가 충분히 크면 `표본평균벡터`는 중심극한정리(Central Limit Theorem)에 의해 근사적으로 다변량 정규분포를 따른다.
+    - 중심극한정리 : 모집단 분포에 상관없이 표본의 크기가 충분히 크면 표본평균은 근사적으로 정규분포를 따른다.
+- 다변량 데이터 분석에서 데이터의 분포는 주로 다변량 정규분포를 가정하며, 이렇게 가정한 경우 수학적으로 다루기 쉬운 상황이 되어 통계적 추론에서 많이 이점이 있다.
+- 다변량 데이터의 복잡성을 다루는 연구자들은 종종 다변량 데이터가 다변량 정규분포를 따르는 지에 대한 검증을 요구한다.
+
+----------------------
+
+## **1-1. 다변량 정규분포의 확률밀도함수**
+
+- 일변량 확률변수 $X$가 평균이 $\mu$이고 분산이 $\sigma^2$인 정규분포를 따를 때, $X \sim N(\mu, \sigma^2)$로 표기하며 확률변수 $X$는 다음과 같은 확률밀도함수(Probability Density Function)를 가진다.
+$$
+\begin{align*}
+f(x) = \frac{1}{\sqrt{2\pi\sigma^2}}e^{ -\frac{(x-\mu)^2}{2\sigma^2}  }, \;\; -\infty < x < \infty.
+\end{align*}
+$$
+- 확률벡터 $\mathbf{X}=(X_1, \ldots, X_p)^T$가 평균이 $\boldsymbol{\mu}$이고 공분산행렬이 $\boldsymbol{\Sigma}$인 다변량 정규분포를 따를 때, 확률밀도함수는 다음과 같으며 $\mathbf{X}\sim N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma})$로 표기한다.
+$$
+\begin{align*}
+f(\mathbf{x}) = \frac{1}{(2\pi)^{p/2}|\boldsymbol{\Sigma}|^{1/2}}e^{ -\frac{1}{2}(\mathbf{x}-\boldsymbol{\mu})^T \boldsymbol{\Sigma}^{-1}(\mathbf{x}-\boldsymbol{\mu})}
+\end{align*}
+$$
+    - 만약 $p=2$인 경우, 즉, $\boldsymbol{\mu}=(\mu_1,\; \mu_2), \;\boldsymbol{\Sigma}= \begin{pmatrix}\sigma^2_1 & \rho\sigma_1\sigma_2\\\rho\sigma_1\sigma_2 & \sigma^2_2\end{pmatrix}$일 때, 이변량 정규분포(Bivariate Normal Distribution)의 확률밀도함수는 다음과 같다.
+$$
+\begin{align*}
+&f(x_1, x_2) = \frac{1}{2\pi\sigma_1\sigma_2\sqrt{1-\rho^2}}\exp{\left[-\frac{1}{2(1-\rho^2)}\left\lbrace \left(\frac{x_1-\mu_1}{\sigma_1}\right)^2-2\rho\left(\frac{x_1-\mu_1}{\sigma_1}\right)\left(\frac{x_2-\mu_2}{\sigma_2}\right)+\left(\frac{x_2-\mu_2}{\sigma_2}\right)^2        \right\rbrace   \right]},\\ \;\;\; &-\infty < x_1 < \infty, \;\; -\infty < x_2 < \infty.
+\end{align*}
+$$   
+        - 여기서, $-\infty < \mu_1, \;\mu_2<\infty,\; \sigma_1^2 >0,\; \sigma_2^2>0,\; -1<\rho<1$이다.
+        - 예를 들어,  $\boldsymbol{\mu}=(0, 0), \;\boldsymbol{\Sigma} = \begin{pmatrix} 1 & \rho\\\rho & 1 \end{pmatrix}$인 경우의 확률밀도함수를 그리는 방법은 다음과 같다.
+        
+```{r}
+# 이변량 정규분포의 확률밀도 함수 그리기(rho = 0)
+mu1 <- 0 # x1의 평균
+mu2 <- 0 # x2의 평균
+
+s11 <- 1 # x1의 분산
+rho <- 0 # Rho
+s22 <- 1 # x2의 분산
+
+x1 <- seq(-3, 3, length = 50) # x1값
+x2 <- seq(-3, 3, length = 50) # x2값
+
+# 이변량 정규분포의 확률밀도함수
+gaussian_func <- function(x1, x2){
+  term1 <- 1/(2*pi*sqrt(s11*s22*(1-rho^2)))
+  term2 <- -1/(2*(1-rho^2))
+  term3 <- (x1 - mu1)^2/s11
+  term4 <- (x2 - mu2)^2/s22
+  term5 <- 2*rho*((x1 - mu1)*(x2 - mu2))/(sqrt(s11)*sqrt(s22))
+  term1*exp(term2*(term3 + term4 - term5))
+}
+
+# 확률밀도함수 그림
+persp(x1, x2, 
+      outer(x1, x2, gaussian_func),               # 확률밀도함수 값 계산
+      zlab = "",
+      main = expression(paste("Bivariate Normal Density for ", rho==0)),
+      theta = 30, phi = 10)
+
+# 등고선 그림
+contour(x1, x2, 
+        outer(x1, x2, gaussian_func),              # 확률밀도함수 값 계산
+        xlab = "x1", ylab = "x2", 
+        main = expression(paste("Contour of Bivariate Normal Density for ", rho==0)))
+```
+
+```{r}
+# 이변량 정규분포의 확률밀도 함수 그리기(rho = 0.75)
+mu1 <- 0 # x1의 평균
+mu2 <- 0 # x2의 평균
+
+s11 <- 1    # x1의 분산
+rho <- 0.75 # Rho
+s22 <- 1    # x2의 분산
+
+x1 <- seq(-3, 3, length = 50) # x1값
+x2 <- seq(-3, 3, length = 50) # x2값
+
+# 이변량 정규분포의 확률밀도함수
+gaussian_func <- function(x1, x2){
+  term1 <- 1/(2*pi*sqrt(s11*s22*(1-rho^2)))
+  term2 <- -1/(2*(1-rho^2))
+  term3 <- (x1 - mu1)^2/s11
+  term4 <- (x2 - mu2)^2/s22
+  term5 <- 2*rho*((x1 - mu1)*(x2 - mu2))/(sqrt(s11)*sqrt(s22))
+  term1*exp(term2*(term3 + term4 - term5))
+}
+
+# 확률밀도함수 그림
+persp(x1, x2, 
+      outer(x1, x2, gaussian_func),                # 확률밀도함수 값 계산   
+      zlab = "",
+      main = expression(paste("Bivariate Normal Density for ", rho==0.75)),
+      theta = 30, phi = 10)
+
+# 등고선 그림
+contour(x1, x2, 
+        outer(x1, x2, gaussian_func),              # 확률밀도함수 값 계산
+        xlab = "x1", ylab = "x2", 
+        main = expression(paste("Contour of Bivariate Normal Density for ", rho==0.75)))
+```
+   
+-----------------------------------
+
+## **1-2. 다변량 정규분포의 성질**
+
+### **1-2-1. 선형결합식의 분포**
+
+- $\mathbf{X}\sim N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma})$일 때, 
+    1. 상수벡터 $\mathbf{a}=(a_1, \ldots, a_p)^T$에 대해 선형결합식 $\mathbf{a}^T\mathbf{X} = a_1X_1+ \ldots, a_pX_p$는 평균이 $\mathbf{a}^T\boldsymbol{\mu}$이고 분산이 $\mathbf{a}^T\boldsymbol{\Sigma}\mathbf{a}$인 일변량 정규분포를 따른다. 즉, $\mathbf{a}^T\mathbf{X} \sim N(\mathbf{a}^T\boldsymbol{\mu}, \mathbf{a}^T\boldsymbol{\Sigma}\mathbf{a})$.
+    2. $q\times p$ 상수행렬 $\mathbf{A}$, $p\times 1$ 상수벡터 $\mathbf{d}$에 대해 $\mathbf{AX}\sim N_q(\mathbf{A}\boldsymbol{\mu}, \mathbf{A}\boldsymbol{\Sigma}\mathbf{A}^T)$이고, $\mathbf{X+d}\sim N_p(\boldsymbol{\mu}+\mathbf{d}, \boldsymbol{\Sigma})$이다.
+    
+-----------------------------------
+
+### **1-2-2. 표준화 변수**
+
+- $\mathbf{X}\sim N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma})$일 때, 표준화벡터 $\mathbf{Z}=\boldsymbol{\Sigma}^{-1/2}(\mathbf{X}-\boldsymbol{\mu})$는 $N_p(\mathbf{0}, \mathbf{I})$를 따른다.
+
+-----------------------------------
+
+### **1-2-3. 다변량 정규분포의 주변 및 조건부확률밀도함수**
+
+- $p$-변량 정규분포를 따르는 확률벡터 $\mathbf{X}$를 $q\times 1$벡터 $\mathbf{X}_{1}$과 $(p\times q)\times 1$벡터 $\mathbf{X}_2$로 분할할 때,
+    1. $\mathbf{X}_{p\times 1}=\begin{pmatrix}\mathbf{X}_1 \\ \mathbf{X}_2 \end{pmatrix}$는 평균벡터 $\boldsymbol{\mu}_{p\times 1}= \begin{pmatrix}\boldsymbol{\mu}_1 \\ \boldsymbol{\mu}_2 \end{pmatrix}$와 공분산행렬 $\boldsymbol{\Sigma}_{p\times p}=\begin{pmatrix}\boldsymbol{\Sigma}_{11} & \boldsymbol{\Sigma}_{12}\\ \boldsymbol{\Sigma}_{21} & \boldsymbol{\Sigma}_{22} \end{pmatrix}$을 가지며 $\mathbf{X}_1$은 $q$-변량 정규분포를 따른다. 즉, $\mathbf{X}_1 \sim N_q(\boldsymbol{\mu_1}, \boldsymbol{\Sigma}_{11})$.
+    2. $\mathbf{X}_{2}=\mathbf{x}_{2}$가 주어졌을 때 $\mathbf{X}_{1}$의 조건부 분포 $\mathbf{X}_{1}|\mathbf{X}_{2}=\mathbf{x}_{2}$는 $N(\boldsymbol{\mu}_{1}+\boldsymbol{\Sigma}_{12}\boldsymbol{\Sigma}_{22}^{-1}(\mathbf{x}_2-\boldsymbol{\mu}_2)$,$\boldsymbol{\Sigma}_{11}-\boldsymbol{\Sigma}_{12}\boldsymbol{\Sigma}_{22}^{-1}\boldsymbol{\Sigma}_{21})$이다.
+
+-----------------------------------
+
+### **1-2-4. 다변량 정규분포의 독립성**
+
+- 확률벡터 $\mathbf{X}$의 부분벡터인  $\mathbf{X}_{1}$과 $\mathbf{X}_2$에 대해, 공분산행렬 $\boldsymbol{\Sigma}_{12}=\mathbf{0}$이면 $\mathbf{X}_{1}$과 $\mathbf{X}_2$는 서로 독립이다.  
+    $\Leftrightarrow$ $\mathbf{X}_{1}$과 $\mathbf{X}_2$이 독립이면, 공분산행렬 $\boldsymbol{\Sigma}_{12}=\mathbf{0}$이다.
+
+-----------------------------------
+
+### **1-2-5. 정규 확률벡터 합의 분포**
+
+- $q\times 1$ 크기의 확률벡터 $\mathbf{X}_{1} \sim N_q(\boldsymbol{\mu}_{1}, \boldsymbol{\Sigma}_{11})$과 $\mathbf{X}_2\sim N_q(\boldsymbol{\mu}_{2}, \boldsymbol{\Sigma}_{22})$가 서로 독립일 때,
+    1. 두 벡터의 합 : $\mathbf{X}_1 +\mathbf{X}_2 \sim N_q(\boldsymbol{\mu}_{1}+\boldsymbol{\mu}_2, \boldsymbol{\Sigma}_{11} + \boldsymbol{\Sigma}_{22})$
+    2. 두 벡터의 차 : $\mathbf{X}_1 -\mathbf{X}_2 \sim N_q(\boldsymbol{\mu}_{1}-\boldsymbol{\mu}_2, \boldsymbol{\Sigma}_{11} + \boldsymbol{\Sigma}_{22})$
+
+-----------------------------------
+
+### **1-2-6. 표본평균벡터와 표본공분산행렬의 분포**
+
+- $\mathbf{X}_1, \ldots,\mathbf{X}_i=(X_{i1}, \ldots, X_{ip})^T, \ldots, \mathbf{X}_n$을 $N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma})$로부터 추출한 확률표본이라고 할 때, 다음이 성립한다.
+    1. 표본평균벡터 $\bar{\mathbf{X}}=(\bar{X}_1, \ldots, \bar{X}_p)^T$는 $N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma}/n)$을 따른다.
+        - 여기서 $\bar{X}_k=\frac{1}{n}\sum_{j=1}^n X_{jk}$이다.
+    2. 표본공분산행렬 $\boldsymbol{S}$에 대해 $(n-1)\boldsymbol{S}$는 $W_p(n-1, \boldsymbol{\Sigma})$를 따른다. 
+        - 여기서 $W_p(n-1, \boldsymbol{\Sigma})$는 자유도가 $(n-1)$인 위샤트 분포이다.
+        - $\boldsymbol{Z}_1, \ldots, \boldsymbol{Z}_n$을 $N_p(\boldsymbol{0}, \boldsymbol{\Sigma})$로부터 추출한 확률표본일 때, 확률행렬 $\sum_{i=1}^n \boldsymbol{Z}_i \boldsymbol{Z}_i^T$은 자유도가 $n$인 위샤트 분포를 따르며, 기호로는 $W_p(n, \boldsymbol{\Sigma})$로 나타낸다. 
+        - 위샤트 분포는 카이제곱분포의 다변량 형태로 이해할 수 있다.
+    3. $\bar{\mathbf{X}}$와 $\boldsymbol{S}$는 서로 독립이다.
+    4. $(\bar{\mathbf{X}}-\boldsymbol{\mu})^T\left(\frac{\boldsymbol{\Sigma}}{n}\right)^{-1}(\bar{\mathbf{X}}-\boldsymbol{\mu})$는 자유도가 $p$인 카이제곱분포를 따른다.
+    5. $n-p\to\infty$이면 $(\bar{\mathbf{X}}-\boldsymbol{\mu})^T\left(\frac{\boldsymbol{S}}{n}\right)^{-1}(\bar{\mathbf{X}}-\boldsymbol{\mu})$는 근사적으로 자유도가 $p$인 카이제곱분포를 따른다.
+    
+-----------------------------------
+
+## **1-3. 다변량 데이터의 정규성 평가**
+
+### **1-3-1. 카이제곱그림**
+
+- $\mathbf{X}\sim N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma})$이고 $|\boldsymbol{\Sigma}|>0$일 때, $(\mathbf{X}-\boldsymbol{\mu})^T\boldsymbol{\Sigma}^{-1}(\mathbf{X}-\boldsymbol{\mu}) \sim \chi^2(p)$이다.
+- $\mathbf{X}_1, \ldots, \mathbf{X}_n$을 $N_p(\boldsymbol{\mu}, \boldsymbol{\Sigma})$로부터 추출한 확률표본이라고 할 때, $\mathbf{X}_i=(X_{i1}, \ldots, X_{ip})^T$의 $\bar{\mathbf{X}}=(\bar{X}_1, \ldots, \bar{X}_p)^T$로부터의 마할라노비스 제곱거리(Mahalanobis Squared Distance) 또는 일반화 제곱거리(Generalized Squared Distance) $d_i^2$은 `근사적`으로 $\chi^2(p)$를 따른다. 
+    - 즉, $d_i^2 = (\mathbf{X}_i-\bar{\mathbf{X}})^T\boldsymbol{S}^{-1}(\mathbf{X}_i-\bar{\mathbf{X}}) \overset{\underset{\mathrm{.}}{}}{\sim} \chi^2(p)$.
+        - 여기서 $\boldsymbol{S}$는 표본공산분행렬이다.
+- 마할라노비스 제곱거리 $d_i^2$는 독립이거나 정확한 카이제곱분포를 따르지는 않으나, 관측값이 다변량 정규분포를 따르는 지를 판단하는 카이제곱그림(Chi-square Plot)을 제공한다.
+- 카이제곱그림은 $d_i^2$를 순서대로 늘어놓고 누적확률이 $\frac{i-0.5}{n}$에 해당하는 자유도가 $p$인 카이제곱분포로부터의 분위수를 구해 (분위수, 거리)의 이차원 공간에 점을 찍고 기울기가 "1"인 직선과 비교하여 다변량 정규성을 검토하는 그림이다. 
+- 카이제곱그림은 다음의 두 단계로 그려진다.
+    1. 마할라노비스 제곱거리 $d_i^2$를 구하고 크기순으로 정렬한다.
+        - 즉, $d_{(1)}^2\le d_{(2)}^2\le \ldots \le d_{(n)}^2$.
+    2. $\left\lbrace \chi^2_p \left(\frac{i-0.5}{n} \right), d^2_{(i)}\right\rbrace$ 점을 그린다.
+        - 즉, $d_{(i)}^2$와 이론적으로 정규분포를 따를 때의 사분위수를 구해 비교하여 다변량 정규성을 검토한다.
+- 관측된 다변량 데이터 $\mathbf{x}_1, \ldots, \mathbf{x}_n$가 다변량 정규분포를 만족한다면 마할라노비스 제곱거리 $d_i^2$는 근사적으로 카이제곱분포를 따르기 때문에 카이제곱그림은 기울기가 "1"인 직선이 된다.
+    - 즉, 카이제곱그림이 직선에 가까우면 관측 데이터가 다변량 정규분포를 잘 따른다고 판단한다.
+    - 또한, 직선으로부터 크게 벗어나는 점을 이상치 데이터로 판단한다.
+
+```{r}
+# 예제 1
+pacman::p_load("MVA")                         # For Data
+
+data(USairpollution)
+str(USairpollution)
+
+USairpollution
+
+# 마할라노비스 제곱거리 계산
+S <- cov(USairpollution)                       # 표본공분산행렬
+D2 <- mahalanobis(USairpollution,              # 데이터 행렬
+                  colMeans(USairpollution),    # 평균벡터
+                  S)                           # 표본공분산행렬
+
+D2
+
+# 카이제곱그림
+qqplot(qchisq(ppoints(41,                       # 데이터 개수
+                      a = 1/2),                 # (1:n-a)/(n+1-2a)
+              df = 7),                          # 카이제곱분포 자유도는 변수 개수 
+       D2)        
+abline(a = 0, b = 1, col = "grey")              # a+bx 직선을 그리는 함수
+```
+
+`Caution!` 함수 `mahalanobis(데이터 행렬, 평균벡터, 표본공분산행렬)`를 통해 관측된 데이터의 마할라노비스 거리를 계산할 수 있다. 계산된 마할라노비스 거리가 카이제곱분포를 따르는 지 파악하기 위해 카이제곱그림을 그렸으며, 이때 함수 `qqplot(x, y)`을 이용하였다. 함수 `qqplot(x, y)`는 두 데이터 셋 "x"와 "y"가 같은 분포로부터 왔는지를 확인할 때 사용하는 함수로서 일반적으로 관측된 데이터가 이론적인 분포를 따르는지 파악할 때 쓰인다. 함수 `qqplot()`에 입력된 벡터 `qchisq(ppoints(41, a = 1/2), df = 7)`의 함수 `ppoints(41, a = 1/2)`는 $\left(\frac{1:41-0.5}{41} \right)$을 계산하며, 함수 `qchisq(a, df)`는 누적확률이 "a"에 해당하는 자유도가 "df"인 카이제곱분포로부터의 분위수를 구해준다. 여기서 총 7개의 변수가 있기 때문에 자유도는 7이 되었다.  
+`Result!` 큰 상위 3개 정도의 데이터가 다변량 정규분포로부터 벗어난 점으로 보인다.
+
+---------------------------
+
+```{r}
+# 예제 2
+data(mtcars)
+str(mtcars)
+
+mtcars
+
+mtcars.d <- mtcars[,c("mpg", "disp", "hp", "drat", "wt", "qsec")]
+
+# 마할라노비스 제곱거리 계산
+S <- cov(mtcars.d)                             # 표본공분산행렬
+D2 <- mahalanobis(mtcars.d,                    # 데이터 행렬
+                  colMeans(mtcars.d),          # 평균벡터
+                  S)                           # 표본공분산행렬
+
+D2
+
+# 카이제곱그림
+qqplot(qchisq(ppoints(32,                      # 데이터 개수
+                      a = 1/2),                # (1:n-a)/(n+1-2a)
+              df = 6),                         # 카이제곱분포 자유도는 변수 개수 
+       D2)                                    
+abline(a = 0, b = 1, col = "grey")             # a+bx 직선을 그리는 함수
+```
+
+`Result!` 전반적으로 점들이 직선에 가깝기 때문에 다변량 정규분포를 잘 따르는 것으로 보인다.
+
+----------------------
+
+```{r}
+# 예제 3
+data(iris)
+str(iris)
+
+# 마할라노비스 제곱거리 계산
+S <- cov(iris[,1:4])                       # 표본공분산행렬
+D2 <- mahalanobis(iris[,1:4],              # 데이터 행렬
+                  colMeans(iris[,1:4]),    # 평균벡터
+                  S)                       # 표본공분산행렬
+
+D2
+
+# 카이제곱그림
+qqplot(qchisq(ppoints(150,                     # 데이터 개수
+                      a = 1/2),                # (1:n-a)/(n+1-2a)
+              df = 4),                         # 카이제곱분포 자유도는 변수 개수 
+       D2)                                    
+abline(a = 0, b = 1, col = "grey")             # a+bx 직선을 그리는 함수
+```
+
+`Result!` 전반적으로 점들이 직선에 가깝기 때문에 다변량 정규분포를 잘 따르는 것으로 보인다.
+
+-----------------------------------------
+
+### **1-3-2. Shapiro Wilk 정규성 검정**
+
+- 위의 카이제곱그림은 시각적으로 정규성 가정을 확인하기 때문에 정확한 판단이 어려울 때가 있다.
+- 그래서, 가설 검정으로 정규성을 검토하기 위해 Shapiro-Wilk 정규성 검정을 수행할 수 있다.
+- Shapiro-Wilk 검정은 주어진 데이터가 있을 때, 그 데이터들이 정규분포로부터 추출된 표본인지 검정하는 방법이다.
+    - Shapiro-Wilk 검정의 귀무가설($H_0$)은 "주어진 데이터의 모집단은 다변량 정규분포를 따른다."이고 대립가설($H_1$)이 "주어진 데이터의 모집단은 다변량 정규분포를 따르지 않는다."이다.
+- 다변량 데이터에 대한 정규성 검정은 Package `mvnormtest`에 내장되어 있는 함수 `mshapiro.test()`를 통해 Shapiro-Wilk 검정을 수행할 수 있다.
+    
+    
+```{r}
+pacman::p_load("mvnormtest")
+
+# 예제 1
+data(USairpollution)
+
+mshapiro.test(t(USairpollution)) # 한 행이 하나의 변수값
+```
+    
+`Result!` Shapiro-Wilk 검정통계량 값이 0.59549이며, $p$-값이 2.025e-09로 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha = 0.05$보다 작으므로 귀무가설을 기각한다. 즉, "USairpollution" 데이터는 다변량 정규분포를 따르지 않는다.
+
+---------------------------------------
+
+```{r}
+# 예제 2
+data(mtcars)
+
+mtcars.d <- mtcars[,c("mpg", "disp", "hp", "drat", "wt", "qsec")]
+
+mshapiro.test(t(mtcars.d)) # 한 행이 하나의 변수값
+```
+
+`Result!` Shapiro-Wilk 검정통계량 값이 0.80886이며, $p$-값이 6.008e-05로 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha = 0.05$보다 작으므로 귀무가설을 기각한다. 즉, "mtcars.d" 데이터는 다변량 정규분포를 따르지 않는다.
+
+---------------------------------------
+
+```{r}
+# 예제 3
+data(iris)
+
+mshapiro.test(t(as.matrix(iris[,1:4]))) # 한 행이 하나의 변수값
+```
+
+`Result!` Shapiro-Wilk 검정통계량 값이 0.97935이며, $p$-값이 0.02342이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha = 0.05$보다 작으므로 귀무가설을 기각한다. 즉, "iris" 데이터는 다변량 정규분포를 따르지 않는다.
+
+----------------------------------------
+
+## **1-4. 정규화 변환: 박스-콕스 변환**
+
+- 정규성이 성립한다고 할 수 없을 때, 대체로 두 가지 방법이 있다.
+    1. 정규성 검정 결과를 무시하고 무작정 정규성을 가정하는 것
+        - 표본의 크기가 충분히 클 때는 큰 문제가 되지 않을 수도 있으나 결론에 오류 가능성을 배제할 수 없다.
+    2. 변수변환을 통해 정규성을 만족하는 변수로 만드는 것
+        - 대표적인 방법이 박스-콕스 변환(Box-Cox Transformation)이다.
+
+#### **일변량의 경우**
+
+- 박스-콕스 변환은 분산안정화 및 정규화를 위한 변환을 수행한다.
+- 이 변환은 원자료($x$)에 대해 다음의 변환을 수행한다.
+$$
+\begin{align*}
+x^* = \begin{cases}
+\frac{x^\lambda-1}{\lambda}, \;\; &\lambda \ne 0\\
+\log(x), \;\;\; &\lambda = 0
+\end{cases}
+\end{align*}
+$$
+    - 위의 변환에서 $\lambda$값은 원자료($x$)로부터 추정되며, 변환된 자료($x^*$)는 정규분포에 가까운 형태를 취하게 된다.
+- R에서 박스-콕스 변환은 다음 함수를 이용할 수 있다.
+    - Package `MASS`에 내장되어 있는 함수 `boxcox()`
+    - Package `car`에 내장되어 있는 함수 `bcPower()`
+    - Package `car`에 내장되어 있는 함수 `powerTransform()`
+
+```{r}
+pacman::p_load("MASS")
+x <- mtcars$mpg
+
+par(mfrow = c(1,2))
+hist(x)                             # 히스토그램
+qqnorm(x)                           # 정규확률그림
+
+# 박스-콕스 변환
+p <- boxcox(lm(x~1),
+            plotit = FALSE,
+            lambda = seq(-10, 10, by = 0.0001))   # 후보 Lambda 값
+lambda <- p$x[which.max(p$y)]                     # 로그 우도함수가 최대가 되는 Lambda값
+lambda
+
+x_star <- if(lambda==0){
+  log(x)
+}else{
+    (x^lambda - 1) / lambda
+}
+
+x_star
+
+par(mfrow = c(1,2))
+hist(x_star)
+qqnorm(x_star)
+```
+
+`Result!` 원자료 "x"에 대한 히스토그램과 정규확률그림을 보면, "x"가 정규분포를 따르고 있지 않다는 것을 알 수 있다. 왜냐하면 히스토그램은 왼쪽으로 치우쳐져 있으며, Q-Q plot은 직선에 가깝지 않기 때문이다. 하지만, 박스-콕스 변환을 적용한 "x_star"는 히스토그램도 좌우대칭 종모양이며, Q-Q plot도 직선에 가깝기 때문에 정규분포를 따르고 있음을 알 수 있다.
+
+-----------------------------------
+
+```{r}
+pacman::p_load("car")
+
+# 원자료
+set.seed(100)
+x <- rexp(1000)                     # 지수분포로부터 난수발생
+
+par(mfrow = c(1,2))
+hist(x)                             # 히스토그램
+qqnorm(x)                           # 정규확률그림
+
+# 박스-콕스 변환
+p <- powerTransform(x)              # 람다 추정
+p
+
+x_star <- bcPower(x, p$lambda)      # 박스-콕스 변환 적용
+
+par(mfrow = c(1,2))
+hist(x_star)
+qqnorm(x_star)
+```
+
+`Result!` 원자료 "x"에 대한 히스토그램과 정규확률그림을 보면, "x"가 정규분포를 따르고 있지 않다는 것을 알 수 있다. 왜냐하면 히스토그램은 왼쪽으로 치우쳐져 있으며, Q-Q plot은 직선에 가깝지 않기 때문이다. 하지만, 박스-콕스 변환을 적용한 "x_star"는 히스토그램도 좌우대칭 종모양이며, Q-Q plot도 직선에 가깝기 때문에 정규분포를 따르고 있음을 알 수 있다.
+
+------------------------------------
+
+#### **다변량의 경우**
+
+- 몇몇 다변량 데이터 분석의 이론은 모집단에 대해 다변량 정규분포의 가정을 요구한다.
+- 그러나, 실제로 데이터 분석을 수행할 때는 이 가정에 대한 검토를 생략하는 경우가 매우 빈번하다.
+    - 그 이유는 다변량 데이터에 대한 정규화 변환의 절차가 다소 복잡한 면이 있으며, 표본의 크기가 충분히 큰 경우에는 비정규성이 완화되는 측면이 있기 때문이다.
+- 일변량의 경우에서와 마찬가지로 박스-콕스 변환은 다변량의 경우에도 유사하게 적용된다.
+- 다만, 각 변수별로 변환의 차수를 `동시에 결정`하는 과정에 반복식을 통한 계산 과정이 필요하다.
+    - 이 과정을 간단히 소개하면 다음과 같다.
+        - 변환된 변수들이 다변량 정규분포를 따른다고 가정하면, 원 변수들의 분포는 변환식에 의해 구할 수 있다.
+        - 이 분포에서 변환모수 $\boldsymbol{\lambda}=(\lambda_1, \ldots, \lambda_p)^T$에 대한 프로파일 로그-가능도함수를 정의하고, 이를 최대로 하는 $\boldsymbol{\lambda}$를 추정한다.
+        
+------------------------------------
+
+# **2. 모집단 평균벡터에 대한 추론**
+
+- 다변량 정규모집단으로부터 얻은 확률표본에 대해 모집단의 평균벡터에 대한 추론을 알아보고자 한다. 
+- 모평균벡터의 검정에는 일변량 $t$-검정의 확장된 개념으로 Hotelling의 $T^2$ 검정을 사용한다.
+- 일변량 $t$-검정과 달리 Hotelling의 $T^2$ 검정에서는 변수들 간의 공분산을 이용하여 검정을 수행한다.
+-  Hotelling의 $T^2$ 검정은 Package `ICSNP`에 내장되어 있는 함수 `HotellingsT2()`를 통해 수행할 수 있다.
+    - 함수 `HotellingsT2()`는 두 집단에 대한 검정일 경우, 공분산행렬은 같다고 가정한다.
+
+----------------------------------
+
+## **2-1. Hotelling의 $T^2$ 검정**
+
+- 다변량 정규모집단의 가정하에서 모평균벡터에 대한 검정통계량으로 Hotelling의 $T^2$ 통계량이 사용된다.
+    - 이 통계량은 일변량의 $t$-통계량을 다변량으로 확장한 것이다. 
+        - 일변량의 $t$-통계량은 소표본(관측 개수 $n<30$)이고, 모분산을 모를 때 모평균 추론에서 사용되는 통계량이다.
+
+---------------------------------
+
+### **2-1-1. 일표본 $t$-검정과 다변량인 경우로의 확장**
+
+- 일변량 확률표본 $X_1, \ldots, X_n$이 서로 독립이고 $N(\mu_0, \sigma^2)$를 따를 때, $t$-통계량은 $t=\frac{\bar{X}-\mu_0}{s/\sqrt{n}}\sim t(n-1)$이다.
+    - 여기서 $s^2=\frac{1}{n-1}\sum_{i=1}^n(X_i-\bar{X})$은 $\sigma^2$의 불편추정량이다.
+- 일변량 확률표본에 대한 $t$-통계량의 제곱 형태 $t^2=n(\bar{X}-\mu_0)(s^2)^{-1}(\bar{X}-\mu_0)$는 다변량의 경우로 확장할 수 있다.
+- 다변량 확률표본 $\mathbf{X}_{1}, \ldots, \mathbf{X}_n$이 서로 독립이고 $p$-변량 정규분포 $N_p(\boldsymbol{\mu}_0, \Sigma)$를 따른다고 하자.
+    - 여기서 $\mathbf{X}_i=(X_{i1}, \ldots, X_{ip})^T$는 $i$번째 개체에 대한 확률벡터이며, 관측 개수는 $n$이고 변수 개수는 $p$개이다.
+    - 만약 모공분산행렬 $\boldsymbol{\Sigma}$를 모른다면, $\boldsymbol{\Sigma}$의 추정통계량으로 표본공분산행렬 $\hat{\boldsymbol{\Sigma}}=\boldsymbol{S}=\frac{1}{n-1}\sum_{i=1}^n (\mathbf{X}_i-\bar{\mathbf{X}})(\mathbf{X}_i-\bar{\mathbf{X}})^T$을 얻는다.
+- 모평균벡터에 대한 추론을 위한 통계량은 Hotelling의 $T^2$ 통계량으로 $T^2=n(\bar{\mathbf{X}}-\boldsymbol{\mu}_0)^T\boldsymbol{S}^{-1}(\bar{\mathbf{X}}-\boldsymbol{\mu}_0)$이다.
+    - Hotelling의 $T^2$ 통계량은 $T^2\sim \frac{(n-1)p}{n-p}F_{p,n-p}$, 즉, 자유도가 $p,\;n-p$인 $F$분포를 따른다.
+
+-------------------------------
+
+### **2-1-2. $\boldsymbol{\Sigma}$를 모를 때 Hotelling $T^2$ 검정**
+
+- 일변량의 경우, 한 개의 정규분포 $N(\mu_0, \sigma^2)$를 따르는 모집단으로부터 얻은 확률표본 $X_1, \ldots, X_n$에 대해 특정한 모평균($H_0: \mu = \mu_0$)에 대한 가설검정을 하기 위한 검정통계량 $t=\frac{\bar{X}-\mu_0}{s/\sqrt{n}}$는 $H_0$하에서 $t_{n-1}$분포를 따른다.
+    - 이때 $n<30$으로 소표본이고 모분산 $\sigma^2$을 모른다고 가정한다.
+- 다변량의 경우, 서로 독립인 $n$개의 $p\times 1$ 확률벡터 $\mathbf{X}_1, \ldots, \mathbf{X}_n$를 모평균벡터가 $\boldsymbol{\mu}$이고 공분산행렬이 $\boldsymbol{\Sigma}$인 $p$-변량 정규분포로부터 얻었을 때, $\boldsymbol{\mu}=\boldsymbol{\mu}_0$에 대한 검정법은 다음과 같다.
+    1. 통계적 가설 : $H_0 : \boldsymbol{\mu}=\boldsymbol{\mu}_0$ vs $H_1 :\boldsymbol{\mu}\ne\boldsymbol{\mu}_0$.
+    2. 검정법 : 유의수준 $\alpha$에서 $T^2=n(\bar{\mathbf{X}}-\boldsymbol{\mu}_0)^T\boldsymbol{S}^{-1}(\bar{\mathbf{X}}-\boldsymbol{\mu}_0) \ge \frac{(n-1)p}{n-p}F_{p,n-p}(\alpha)$이면 $H_0$를 기각한다.
+        - $F_{p,n-p}(\alpha)$는 자유도가 $p,\; n-p$인 $F$분포를 따르는 확률변수 $F$에 대해 $P(F\ge F_{p, n-p}(\alpha))=\alpha$를 만족하는 값이다.
+
+```{r}
+pacman::p_load("ICSNP")
+
+data(pulmonary)
+pulmonary
+
+# 일표본 Hotelling T^2 test
+HotellingsT2(X = pulmonary,             # p개의 변수로 이루어진 데이터 행렬
+             mu = c(0, 0, 0),           # True mean vector
+             test = "f")                # "f" : F-distribution , "chi" : Chi-sqaured approximation
+
+```
+
+`Result!` $H_0 : \boldsymbol{\mu}=\begin{pmatrix} 0 \\ 0 \\ 0  \end{pmatrix}$ vs $H_1 :\boldsymbol{\mu}\ne\begin{pmatrix} 0 \\ 0 \\ 0 \end{pmatrix}$일 때, $\frac{n-p}{(n-1)p}T^2$ 값은 3.8231이고 $p$-값은 0.05123이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 평균벡터가 $\begin{pmatrix} 0 \\ 0 \\ 0 \end{pmatrix}$이라고 할 수 있다.
+
+-----------------------------------
+
+```{r}
+# 일표본 Hotelling T^2 test
+HotellingsT2(X = pulmonary,             # p개의 변수로 이루어진 데이터 행렬
+             mu = c(0, 0, 2),           # True mean vector
+             test = "f")                # "f" : F-distribution , "chi" : Chi-sqaured approximation
+
+```
+
+`Result!` $H_0 : \boldsymbol{\mu}=\begin{pmatrix} 0 \\ 0 \\ 2  \end{pmatrix}$ vs $H_1 :\boldsymbol{\mu}\ne\begin{pmatrix} 0 \\ 0 \\ 2 \end{pmatrix}$일 때, $\frac{n-p}{(n-1)p}T^2$ 값은 6.6204이고 $p$-값은 0.01178이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 평균벡터가 $\begin{pmatrix} 0 \\ 0 \\ 2 \end{pmatrix}$라고 할 수 없다.
+
+
+-------------------
+
+### **2-1-3. 두 모집단에 대한 Hotelling $T^2$ 검정**
+
+#### **$\boldsymbol{\Sigma}_1=\boldsymbol{\Sigma}_2=\boldsymbol{\Sigma}$인 경우**
+
+- 두 개 모집단으로부터 서로 독립이고 $p$-변량 정규분포를 따르는 $n_1$개의 $p\times 1$ 확률벡터로 구성된 $\mathbf{X}_{11}, \ldots, \mathbf{X}_{1n_1}$ 확률표본과 $n_2$개의 $p\times 1$ 확률벡터로 구성된 $\mathbf{X}_{21}, \ldots, \mathbf{X}_{2n_2}$ 확률표본을 얻었다고 가정하자.
+    - 즉, $\mathbf{X}_{1j} \overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_1, \boldsymbol{\Sigma}_1)$, $\mathbf{X}_{2j} \overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_2, \boldsymbol{\Sigma}_2)$일 때 두 집단의 모평균벡터가 같은지 검정하고자 한다.
+    - 이때 공분산행렬은 $\boldsymbol{\Sigma}_1=\boldsymbol{\Sigma}_2=\boldsymbol{\Sigma}$이며, $\boldsymbol{\Sigma}$는 알려지지 않았다고 가정한다.
+- 그러면, $\boldsymbol{\mu}_1=\boldsymbol{\mu}_2$에 대한 검정법은 다음과 같다.
+    1. 통계적 가설 : $H_0 : \boldsymbol{\mu}_1=\boldsymbol{\mu}_2$ vs $H_1 :\boldsymbol{\mu}_1\ne\boldsymbol{\mu}_2$.
+    2. 검정법 : 유의수준 $\alpha$에서 다음을 만족하면 $H_0$를 기각한다.
+$$
+\begin{align*}
+    T^2&=(\bar{\mathbf{X}}_1-\bar{\mathbf{X}}_2)^T\left[\left(\frac{1}{n_1} + \frac{1}{n_2}  \right)\boldsymbol{S}_{pl}\right]^{-1}(\bar{\mathbf{X}}_1-\bar{\mathbf{X}}_2)\\
+     &= \frac{n_1n_2}{n_1+n_2}(\bar{\mathbf{X}}_1-\bar{\mathbf{X}}_2)^T\boldsymbol{S}_{pl}^{-1}(\bar{\mathbf{X}}_1-\bar{\mathbf{X}}_2)\ge\frac{(n_1+n_2-2)p}{n_1+n_2-p-1}F_{p,n_1+n_2-p-1}(\alpha)
+\end{align*}
+$$
+        - 여기서 $\boldsymbol{S}_{pl}=\frac{(n_1-1)\boldsymbol{S}_1+(n_2-1)\boldsymbol{S}_2}{n_1+n_2-2}$은 $p\times p$ 합동공분산행렬(Pooled Covariance Matrix)이고, $\boldsymbol{S}_1=\hat{\boldsymbol{\Sigma}}_1$, $\boldsymbol{S}_2=\hat{\boldsymbol{\Sigma}}_2$이다.
+
+
+```{r}
+# 두 집단에 대한 Hotelling T^2 test
+set.seed(100)
+x1 <- matrix(rnorm(50, 0, 1), nrow = 10)
+x2 <- matrix(rnorm(100, 2, 1), nrow = 20)
+x1
+x2
+
+dt <- rbind(x1, x2)
+g  <- factor(rep(c(1,2), c(10, 20)))             # 집단을 식별하는 변수
+
+
+HotellingsT2(dt ~ g,                             # X ~ g -> X : p개의 변수로 이루어진 데이터 행렬, g : 데이터 행렬의 관측값에 대응되는 두 개의 그룹을 나타내는 범주형 벡터
+             mu = rep(0, 5))
+
+```
+
+`Result!` $H_0 : \boldsymbol{\mu}_1-\boldsymbol{\mu}_2=\begin{pmatrix} 0 \\ 0 \\ 0 \\ 0 \\ 0  \end{pmatrix}$ vs $H_1 :\boldsymbol{\mu}_1-\boldsymbol{\mu}_2 \ne\begin{pmatrix} 0 \\ 0 \\ 0 \\ 0 \\ 0  \end{pmatrix}$일 때, $\frac{n_1+n_2-p-1}{(n_1+n_2-2)p}T^2$ 값은 21.076이고 $p$-값은 4.542e-08이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 두 평균벡터의 차이가 $\begin{pmatrix} 0 \\ 0 \\ 0 \\ 0 \\ 0  \end{pmatrix}$라고 할 수 없다.
+
+-----------------------------------
+
+```{r}
+pacman::p_load("mvtnorm")
+
+set.seed(100)
+x1 <- rmvnorm(20, mean = c(0, 0, 1, 1), sigma = diag(1:4))
+x2 <- rmvnorm(30, mean = c(2, 2, 2, 2), sigma = diag(1:4))
+x1
+x2
+
+dt <- rbind(x1, x2)
+g  <- factor(rep(c(1,2), c(20, 30)))             # 집단을 식별하는 변수
+
+
+HotellingsT2(dt ~ g,                             # X ~ g -> X : p개의 변수로 이루어진 데이터 행렬, g : 데이터 행렬의 관측값에 대응되는 두 개의 그룹을 나타내는 범주형 벡터
+             mu = c(-2, -2, -1, -1))
+```
+
+`Result!` $H_0 : \boldsymbol{\mu}_1-\boldsymbol{\mu}_2=\begin{pmatrix} -2 \\ -2 \\ -1 \\ -1  \end{pmatrix}$ vs $H_1 :\boldsymbol{\mu}_1-\boldsymbol{\mu}_2 \ne\begin{pmatrix} -2 \\ -2 \\ -1 \\ -1  \end{pmatrix}$일 때, $\frac{n_1+n_2-p-1}{(n_1+n_2-2)p}T^2$ 값은 2.1642이고 $p$-값은 0.08837이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 두 평균벡터의 차이가 $\begin{pmatrix} -2 \\ -2 \\ -1 \\ -1  \end{pmatrix}$라고 할 수 있다.
+
+-------------------
+
+#### **$\boldsymbol{\Sigma}_1\ne\boldsymbol{\Sigma}_2$인 경우**   
+
+- 두 개 모집단으로부터 서로 독립이고 $p$-변량 정규분포를 따르는 $n_1$개의 $p\times 1$ 확률벡터로 구성된 $\mathbf{X}_{11}, \ldots, \mathbf{X}_{1n_1}$ 확률표본과 $n_2$개의 $p\times 1$ 확률벡터로 구성된 $\mathbf{X}_{21}, \ldots, \mathbf{X}_{2n_2}$ 확률표본을 얻은 경우, 즉, $\mathbf{X}_{1j} \overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_1, \boldsymbol{\Sigma}_1)$, $\mathbf{X}_{2j} \overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_2, \boldsymbol{\Sigma}_2)$를 따르는 경우, 두 집단의 모평균벡터가 같은지 검정하고자 한다.
+    - 여기서 공분산행렬은 $\boldsymbol{\Sigma}_1\ne\boldsymbol{\Sigma}_2$이며, $\boldsymbol{\Sigma}_1$과 $\boldsymbol{\Sigma}_2$는 알려지지 않았다고 가정한다.
+- 그러면, $\boldsymbol{\mu}_1=\boldsymbol{\mu}_2$에 대한 검정법은 다음과 같다.
+    1. 통계적 가설 : $H_0 : \boldsymbol{\mu}_1=\boldsymbol{\mu}_2$ vs $H_1 :\boldsymbol{\mu}_1\ne\boldsymbol{\mu}_2$.
+    2. 검정법 : 유의수준 $\alpha$에서 근사적인 검정법으로 $n_1-p,\; n_2-p$가 충분히 클 때, $T^2=(\bar{\mathbf{X}}_1-\bar{\mathbf{X}}_2)^T\left(\frac{\boldsymbol{S}_1}{n_1} + \frac{\boldsymbol{S}_2}{n_2}  \right)^{-1}(\bar{\mathbf{X}}_1-\bar{\mathbf{X}}_2)\ge \chi^2_p(\alpha)$이면 $H_0$를 기각한다.
+        - 여기서 $\boldsymbol{S}_1=\hat{\Sigma}_1$이고 $\boldsymbol{S}_2=\hat{\Sigma}_2$이다.
+        
+-------------------
+
+### **2-1-4. 짝지어진 두 집단에 대한 검정**
+
+- 관측값 간에 짝지어진 관계로 인해 두 개의 표본이 서로 독립이 아닐 때 `두 집단`에 대한 $T^2$ 검정은 적절하지 않다.
+    - 예를 들어, 한 학생에게 특별한 교육방법 시행 전과 후 2회 3과목 시험이 치러진 경우와 한 환자에게 약을 투여한 뒤 1시간 후, 3시간 후에 효과와 혈압을 측정한 경우를 들 수 있다.
+- 이러한 경우에는 짝지어진 관계로 인해 각 `측정치 간의 차이`를 구해 `한 개 모집단 문제`로 전환하여 보는 것이 타당하다. 
+- 각 개체에 대해 $p$-변량 정규분포를 따르는 $p\times 1$ 확률벡터를 쌍(Pair)으로 측정하여 $(\mathbf{X}_1, \mathbf{Y}_1), \ldots, (\mathbf{X}_n, \mathbf{Y}_n)$로 확률표본을 얻은 경우 두 집단의 모평균벡터가 같은지 검정하고자 한다.
+    1. 통계적 가설 : $H_0 : \mathbf{d}=\boldsymbol{\mu}_1-\boldsymbol{\mu}_2=0$ vs $H_1 :\mathbf{d}=\boldsymbol{\mu}_1-\boldsymbol{\mu}_2\ne 0$.
+    2. 검정법 : 유의수준 $\alpha$에서 $T^2= \bar{\mathbf{d}}^T\left(\frac{\boldsymbol{S}_d}{n}\right)^{-1}\bar{\mathbf{d}}=n\bar{\mathbf{d}}^T\boldsymbol{S}_d^{-1}\bar{\mathbf{d}}\ge\frac{(n-1)p}{n-p}F_{p, n-p}(\alpha)$이면 $H_0$를 기각한다.
+        - 여기서 $\bar{\mathbf{d}}=\frac{1}{n}\sum_{i=1}^n \mathbf{d}_i$, $\boldsymbol{S}_d=\frac{1}{n-1}\sum_{i=1}^n(\mathbf{d}_i-\bar{\mathbf{d}})(\mathbf{d}_i-\bar{\mathbf{d}})^T$이다.
+
+
+```{r}
+# 짝지어진 두 집단에 대한 검정
+x <- cbind(x1 = c(1, 5, 3, 6, 9, 3, 4, 3, 2),            # 특별한 교육방법 시행 전 2과목 시험 등급
+           x2 = c(1, 3, 2, 5, 9, 6, 2, 1, 5))
+
+y <- cbind(y1 = c(1, 2, 4, 4, 8, 1, 5, 2, 4),            # 특별한 교육방법 시행 후 2과목 시험 등급
+           y2 = c(2, 4, 5, 3, 6, 3, 6, 3, 2))
+
+d <- x-y
+d
+
+# 일표본 Hotelling T^2 test
+HotellingsT2(X = d,             # p개의 변수로 이루어진 데이터 행렬
+             mu = c(0, 0),      # True mean vector
+             test = "f")        # "f" : F-distribution , "chi" : Chi-sqaured approximation
+```
+
+`Result!` $H_0 : \mathbf{d}=\boldsymbol{\mu}_1-\boldsymbol{\mu}_2=\begin{pmatrix} 0 \\ 0 \end{pmatrix}$ vs $H_1 :\mathbf{d}=\boldsymbol{\mu}_1-\boldsymbol{\mu}_2\ne \begin{pmatrix} 0 \\ 0 \end{pmatrix}$일 때, $\frac{n-p}{(n-1)p}T^2$ 값은 0.46483이고 $p$-값은 0.6463이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 두 평균벡터의 차이가 $\begin{pmatrix} 0 \\ 0  \end{pmatrix}$라고 할 수 있으며, 이는 특별한 교육방법 시행 전과 후에 시험 등급은 변화가 없다는 것을 의미한다.
+
+-------------------
+
+# **3. 다변량 분산분석**
+
+- 다변량 분산분석(Multivariate Analysis of Variance, MANOVA)는 `세 개 이상`의 다변량 표본평균이 같은 지를 검정하는 방법이다.
+    - 위에서 소개한 Hotelling $T^2$ 검정은 한 집단 또는 두 집단에 대한 모평균벡터에 대한 추론을 위해 사용된다.
+- 다변량 분산분석은 두 개 또는 그 이상의 변수가 있을 때 사용하는 방법으로, 통상적으로 개별 변수에 대한 유의성 검정을 수행한 후 적용한다.
+- 다변량 분산분석은 일변량 분산분석(ANOVA)의 일반화된 형태이나, 일변량 분산분석(One-way ANOVA)과는 달리 평균의 차이에 대한 유의성 검정에서 변수 간의 공분산을 사용한다.    
+
+-------------------
+
+## **3-1. 일원배치 다변량 분산분석**
+
+- $g(\ge 3)$개 모집단에 대해 모평균벡터에 대한 비교를 위해 일원배치 다변량 분산분석(One-way MANOVA)를 수행하고자 한다.
+- `공분산행렬이 같은` 다변량 정규분포를 따르는 $g$개 모집단에서 각각 $n_1, \ldots, n_g$개의 $p \times 1$ 관측벡터가 얻어졌으며 이들은 서로 독립이라 가정한다.
+$$
+\begin{align*}
+\text{모집단 1 : } &\mathbf{X}_{11}, \ldots, \mathbf{X}_{1n_1} \overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_1, \Sigma)\\
+\text{모집단 2 : } &\mathbf{X}_{21}, \ldots, \mathbf{X}_{2n_2} \overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_2, \Sigma)\\
+&\vdots\\
+\text{모집단 g : } &\mathbf{X}_{g1}, \ldots, \mathbf{X}_{gn_g}\overset{\underset{\mathrm{iid}}{}}{\sim}N_p(\boldsymbol{\mu}_g, \Sigma)\\
+\end{align*}
+$$
+- 데이터의 변동을 처리에 대한 변동과 오차에 의한 변동으로 분해하면 다음과 같다.
+$$
+\begin{align*}
+X_{ij}-\bar{X} = (\bar{\mathbf{X}}_i -\bar{\mathbf{X}}) + (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i) 
+\end{align*}
+$$
+- 마찬가지로 총제곱합행렬을 처리제곱합행렬과 오차제곱합행렬로 분해하면 다음과 같다.
+$$
+\begin{align*}
+&\sum_{i=1}^{g}\sum_{j=1}^{n_i} (\mathbf{X}_{ij}-\bar{\mathbf{X}})(\mathbf{X}_{ij}-\bar{\mathbf{X}})^T\\
+&= \sum_{i=1}^g n_i(\bar{\mathbf{X}}_i -\bar{\mathbf{X}})(\bar{\mathbf{X}}_i -\bar{\mathbf{X}})^T+ \sum_{i=1}^{g}\sum_{j=1}^{n_i} (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i) (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i)^T\\
+& = \mathbf{B}+\mathbf{E}
+\end{align*}
+$$
+    - 여기서 처리간 제곱합(Between Sum of Squares)은 $\mathbf{B}=\sum_{i=1}^g n_i(\bar{\mathbf{X}}_i -\bar{\mathbf{X}})(\bar{\mathbf{X}}_i -\bar{\mathbf{X}})^T$이며 처리평균과 전체 평균간의 변동으로 처리제곱합행렬을 나타낸다.
+    - 또한, 처리내 제곱합(Within Sum of Squares)은 $\mathbf{E}=\sum_{i=1}^{g}\sum_{j=1}^{n_i} (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i) (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i)^T$이며 오차제곱합행렬을 나타낸다.
+    
+| |일원배치 다변량 분산분석표              |
+|:---|:---------------------|:-------------|
+|요인| 제곱합과 교차곱 행렬 |자유도        |
+|처리|$\mathbf{B}=\sum_{i=1}^g n_i(\bar{\mathbf{X}}_i -\bar{\mathbf{X}})(\bar{\mathbf{X}}_i -\bar{\mathbf{X}})^T$| $g-1$|
+|오차|$\mathbf{E}=\sum_{i=1}^{g}\sum_{j=1}^{n_i} (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i) (\mathbf{X}_{ij}-\bar{\mathbf{X}}_i)^T$|$\sum_{i=1}^g n_i -g$|
+|총  | $\mathbf{B}+\mathbf{E}$ | $\sum_{i=1}^g n_i-1$
+| | |
+
+- 일원배치 다변량 분산분석에서 관심 있는 귀무가설($H_0$)은 "집단(처리)간의 모평균벡터에 차이가 없다. 즉, 집단(처리)에 따른 효과가 없다."이고, 대립가설($H_1$)은 "적어도 하나 이상의 집단에서 모평균벡터에 차이가 있다. 즉, 집단에 따른 효과가 있다."이다.
+    1. 통계적 가설 : $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_g$ vs $H_1 : \text{Not } H_0$
+    2. 검정법 : 유의수준 $\alpha$에서 Wilks Lambda 통계량 $\Lambda$를 이용하여 $\Lambda = \frac{|\mathbf{E}|}{|\mathbf{B}+\mathbf{E}|}\le \Lambda_{p, g-1, N-g}(\alpha)$이면 $H_0$를 기각한다. 
+        - 여기서 $N=\sum_{i=1}^g n_i$이며, $\Lambda_{p, g-1, N-g}$는 Wilks Lambda의 분포이다.
+    3. Wilks Lambda의 분포 : $H_0$하에서 $N$이 충분히 크면 근사적으로 $\Lambda^*=-\frac{(N-1-p-g)}{2}\ln{\Lambda}$는 자유도가 $p(g-1)$인 카이제곱분포를 따른다.
+        - 즉, 근사적인 검정법은 $\Lambda^*\ge \chi^2_{p(g-1)}(\alpha)$이면 $H_0$를 기각한다.
+        
+```{r}
+# 일원배치 다변량 분산분석 with Wilks statistics
+data(iris)
+
+fit <- manova(cbind(Sepal.Length, Sepal.Width) ~ Species,      # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = iris)                                     
+
+summary(fit, test = "Wilks")
+```
+
+`Result!` 집단 "Species"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(150) - 집단 내의 범주 개수(3)으로 147이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Wilks Lambda 검정통계량 값은 0.16654이고 근사적인 $F$값은 105.88이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 붓꽃 종류("Species")의 적어도 한 그룹 이상은 평균벡터가 다르다.  
+
+-----------------------------------
+
+```{r}
+# 일원배치 다변량 분산분석 with Wilks statistics
+pacman::p_load("car")
+
+data(Baumann)
+
+fit <- manova(cbind(pretest.1, post.test.1, pretest.2, post.test.2) ~ group, # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = Baumann)
+summary(fit, test = "Wilks")
+```
+
+`Caution!` Package `car`에 내장되어 있는 데이터 `Baumann`은 Baumann와 Jones에 의해 실시된 실험연구로부터 수집된 데이터이다. 총 66개의 행과 6개의 변수로 이루어져 있다. 변수 "group"은 교수법의 종류, "pretest"은 교수법 실시전 시험 점수, "post.test"는 교수법 실시후 시험점수를 나타낸다.  
+`Result!` 집단 "group"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(66) - 집단 내의 범주 개수(3)으로 63이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Wilks Lambda 검정통계량 값은 0.50701이고 근사적인 $F$값은 6.066이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 교수법("group")의 적어도 한 그룹 이상은 평균벡터가 다르다.
+
+--------------------------
+
+### **3-1-1. 그외의 통계량**
+
+- 일원배치 다변량 분산분석의 가설에 대해 널리 사용되는 검정통계량은 다음과 같다.
+    - Wilks Lambda 검정 통계량
+    - Pillai 검정통계량
+    - Lawley-Hotelling 검정통계량
+    - Roy의 검정통계량
+- 위의 통계량들은 행렬 $\mathbf{E}^{-1}\mathbf{B}$의 고유값 $\lambda_1>\ldots>\lambda_s$을 이용하여 검정통계량을 계산한다.
+    - 여기서, $s=\text{min}(g-1, p)$이다.
+    
+----------------------------
+
+#### **Pillai 검정**
+
+- Pillai 검정통계량은 $V^{(S)}=\sum_{i=1}^{s}\frac{\lambda_{i}}{1+\lambda_i}$로 정의되며 $V^{(S)}$가 클수록 $H_0$를 기각한다.
+- 유의수준 $\alpha$에서 검정법은 $V^{(S)}\ge V_{m, N}(\alpha)$이면 $H_0$를 기각한다.
+    - 여기서 $m=\frac{1}{2}(|g-1-p|-1)$, $N=\frac{1}{2}(\sum_{i=1}^g n_i-g-p-1)$이다.
+
+```{r}
+# 일원배치 다변량 분산분석 with Pillai
+data(iris)
+
+fit <- manova(cbind(Sepal.Length, Sepal.Width) ~ Species,      # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = iris)                                        
+
+summary(fit, test = "Pillai")
+```
+
+`Result!` 집단 "Species"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(150) - 집단 내의 범주 개수(3)으로 147이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Pillai 검정통계량 값은 0.94531이고 근사적인 $F$값은 65.878이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 붓꽃 종류("Species")의 적어도 한 그룹 이상은 평균벡터가 다르다.  
+
+-----------------------------------
+
+```{r}
+# 일원배치 다변량 분산분석 with Pillai
+pacman::p_load("car")
+
+data(Baumann)
+
+fit <- manova(cbind(pretest.1, post.test.1, pretest.2, post.test.2) ~ group, # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = Baumann)
+summary(fit, test = "Pillai")
+```
+
+`Result!` 집단 "group"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(66) - 집단 내의 범주 개수(3)으로 63이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Pillai 검정통계량 값은 0.56225이고 근사적인 $F$값은 5.9637이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 교수법("group")의 적어도 한 그룹 이상은 평균벡터가 다르다.
+
+----------------------------
+
+#### **Lawley-Hotelling 검정**  
+  
+- Lawley-Hotelling 검정통계량은 $U^{(S)}=\sum_{i=1}^s \lambda_i$로 정의되며 $U^{(S)}$가 클수록 $H_0$를 기각한다.
+- 유의수준 $\alpha$에서 검정법은 $U^{(S)}\ge U_{g-1, \sum_{i=1}^g n_i-g}(\alpha)$이면 $H_0$를 기각한다.
+
+
+```{r}
+# 일원배치 다변량 분산분석 with Lawley-Hotelling
+data(iris)
+
+fit <- manova(cbind(Sepal.Length, Sepal.Width) ~ Species,      # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = iris)                                        
+
+summary(fit, test = "Hotelling-Lawley")
+```
+
+`Result!` 집단 "Species"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(150) - 집단 내의 범주 개수(3)으로 147이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Lawley-Hotelling 검정통계량 값은 4.3328이고 근사적인 $F$값은 157.06이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 붓꽃 종류("Species")의 적어도 한 그룹 이상은 평균벡터가 다르다.  
+
+-----------------------------------
+
+```{r}
+# 일원배치 다변량 분산분석 with Lawley-Hotelling
+pacman::p_load("car")
+
+data(Baumann)
+
+fit <- manova(cbind(pretest.1, post.test.1, pretest.2, post.test.2) ~ group, # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = Baumann)
+summary(fit, test = "Hotelling-Lawley")
+```
+
+`Result!` 집단 "group"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(66) - 집단 내의 범주 개수(3)으로 63이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Lawley-Hotelling 검정통계량 값은 0.83573이고 근사적인 $F$값은 6.1635이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 교수법("group")의 적어도 한 그룹 이상은 평균벡터가 다르다.
+
+----------------------------
+
+#### **Roy 최대근 검정**  
+  
+- Roy 검정통계량은 $\theta= \frac{\lambda_1}{1+\lambda_1}$로 정의되며 $\theta$가 클수록 $H_0$를 기각한다.
+- 유의수준 $\alpha$에서 검정법은 $\theta\ge R_{m, N}(\alpha)$이면 $H_0$를 기각한다.
+    - 여기서 $m=\frac{1}{2}(|g-1-p|-1)$, $N=\frac{1}{2}(\sum_{i=1}^g n_i-g-p-1)$이다.
+
+```{r}
+# 일원배치 다변량 분산분석 with Roy
+data(iris)
+
+fit <- manova(cbind(Sepal.Length, Sepal.Width) ~ Species,      # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = iris)                                            
+
+summary(fit, test = "Roy")
+```
+
+`Result!` 집단 "Species"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(150) - 집단 내의 범주 개수(3)으로 147이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Roy 검정통계량 값은 4.1718이고 근사적인 $F$값은 306.63이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 붓꽃 종류("Species")의 적어도 한 그룹 이상은 평균벡터가 다르다.  
+
+-----------------------------------
+
+```{r}
+# 일원배치 다변량 분산분석 with Roy
+pacman::p_load("car")
+
+data(Baumann)
+
+fit <- manova(cbind(pretest.1, post.test.1, pretest.2, post.test.2) ~ group, # p개의 변수로 이루어진 데이터 행렬 ~ 각 관측에 해당되는 그룹변수
+              data = Baumann)
+summary(fit, test = "Roy")
+```
+
+`Result!` 집단 "group"의 자유도는 집단 내의 범주 개수(3) - 1로 2가 되고, 잔차에 대한 자유도는 전체 관측 개수(66) - 집단 내의 범주 개수(3)으로 63이 된다. 집단 간의 평균벡터에 차이가 있는 지 검정하기 위해, 가설이 $H_0 : \boldsymbol{\mu}_1=\ldots=\boldsymbol{\mu}_3$ vs $H_1 : \text{Not } H_0$일 때, Roy 검정통계량 값은 0.6128이고 근사적인 $F$값은 9.3453이며, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha=0.05$보다 작기 때문에 귀무가설을 기각한다. 즉, 교수법("group")의 적어도 한 그룹 이상은 평균벡터가 다르다.
+
+--------------------------
+
+## **3-2. 공분산의 동질성 검정**
+
+- 다변량 분산분석(MANOVA)과 선형판별분석 등에서는 분산-공분산행렬의 동질성을 가정한다. 
+- 이 가정에 대해서는 일반적으로 Box의 M-검정이 사용된다.
+    - 그러나, 이 검정은 정규성이 위배될 경우 매우 민감하여, 많은 경우 기각을 하게 된다.
+- Box의 M-검정은 Package `biotools`에 내장되어 있는 함수 `boxM()`을 통해 수행할 수 있다.    
+    - 분산-공분산행렬의 동질성 검정에서 귀무가설($H_0$)은 "모든 집단의 공분산행렬은 동일하다."이고 대립가설($H_1$)이 "적어도 하나 이상의 집단의 분산-공분산행렬에 차이가 있다."이다.
+    
+```{r}
+# 분산-공분산행렬 검정
+pacman::p_load("biotools")
+
+boxM(data = iris[, 1:4],          # X_1, ..., X_p p개의 변수에 대한 값으로 이루어진 데이터 행렬 
+     grouping = iris$Species)     # 범주형 그룹의 벡터
+```
+    
+`Result!` "iris" 데이터의 붓꽃 종류("Species") 간에 분산-공분산행렬 동질성 검정 결과, 근사적인 카이제곱 검정통계량 값은 140.94이고 $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha = 0.05$보다 작으므로 귀무가설을 기각한다. 즉, 붓꽃 종류("Species")간에 분산-공분산행렬은 적어도 하나 이상의 집단에서 차이가 있다.
+
+--------------------------
+
+```{r}
+# 분산-공분산행렬 검정
+pacman::p_load("car")
+
+data(Baumann)
+
+boxM(data = Baumann[, 2:5],       # X_1, ..., X_p p개의 변수에 대한 값으로 이루어진 데이터 행렬 
+     grouping = Baumann$group)    # 범주형 그룹의 벡터
+```
+
+`Result!` "Baumann" 데이터의 교수법("group") 간에 분산-공분산행렬 동질성 검정 결과, 근사적인 카이제곱 검정통계량 값은 20.585이고 $p$-값은 0.4219이다. 이에 근거하여, 유의수준 5%에서 $p$-값이 $\alpha = 0.05$보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 교수법("group")간에 분산-공분산행렬은 모두 같다.

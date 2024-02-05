@@ -1,0 +1,345 @@
+---
+title: "Plotly Package"
+description: |
+  Various Interactive Plots using Plotly Package
+author:
+  - name: Yeongeun Jeon
+date: 11-07-2021
+preview: preview.PNG
+categories: Data Visualization
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+- 참고 : [Plotly 패키지 홈페이지](https://plotly.com/r/)
+
+
+
+```{r}
+pacman::p_load("quantmod",
+               "dplyr", "lubridate",
+               "plotly", "ggplot2")
+
+```
+
+
+# **주식 불러오기**
+
+```{r}
+# 카카오
+kakao <- getSymbols("035720.KS", auto.assign = FALSE,
+                    # src='yahoo',
+                    from = "2018-01-01", to = today())
+
+colnames(kakao) <- c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+kakao <- cbind(Date = index(kakao), data.frame(kakao))
+
+# 삼성
+samsung <- getSymbols("005930.KS", auto.assign = FALSE,
+                    from = "2018-01-01", to = today())
+
+colnames(samsung) <- c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+samsung <- cbind(Date = index(samsung), data.frame(samsung))
+```
+
+-------
+
+# **CandleStick**
+
+---
+
+## **Version 1**
+
+```{r}
+inc <- list(line = list(color = 'red'))   # 상승할 때 색깔
+dec <- list(line = list(color = 'blue'))  # 하락할 때 색깔
+
+# Verson 1
+kakao %>%
+  plot_ly(x = ~Date, type="candlestick",
+          open = ~Open, close = ~Close,
+          high = ~High, low = ~Low,
+          increasing = inc, decreasing = dec) %>%
+  # add_lines(x = ~Date, y = ~Close, line = list(color = 'black', width = 0.75), inherit = F) %>%
+  layout(title= "CandleStick Chart",
+         yaxis = list(title = "Price",
+                      tickformat = "digits"))
+```
+
+---
+
+## **Version 2**
+
+```{r}
+kakao %>%
+  plot_ly(x = ~Date, type="candlestick",
+          open = ~Open, close = ~Close,
+          high = ~High, low = ~Low,
+          increasing = inc, decreasing = dec) %>%
+  # add_lines(x = ~Date, y = ~Close, line = list(color = 'black', width = 0.75), inherit = F) %>%
+  layout(title= "CandleStick Chart",
+         xaxis = list(rangeslider = list(visible = F)), # Without Rangeslider
+         yaxis = list(title = "Price",
+                      tickformat = "digits"))
+```
+
+---
+
+## **Version 3**
+
+```{r}
+cs1 <- kakao %>%
+  plot_ly(x = ~Date, type="candlestick",
+          open = ~Open, close = ~Close,
+          high = ~High, low = ~Low,
+          increasing = inc, decreasing = dec) %>%
+  layout(title= "CandleStick Chart",
+         yaxis = list(title = "Price",
+                      tickformat = "digits"))
+
+# Volume plot
+cs2 <- kakao %>%   
+  dplyr::mutate(direction = ifelse(Close >= Open, "Increasing", "Decreasing")) %>%
+  plot_ly(x=~Date, y=~Volume, type='bar',
+          color = ~direction, colors = c('blue','red'))  %>% 
+  layout(yaxis = list(title = "Volume",
+                      tickformat = "digits"),
+         showlegend = FALSE)
+
+subplot(cs1, cs2,  
+        heights = c(0.7, 0.2), nrows=2,
+        shareX = TRUE, titleY = TRUE )
+```
+
+----
+
+# **Timezone**
+
+----
+
+## **Version 1**
+
+```{r}
+kakao %>%
+  plot_ly(x = ~Date, y = ~Close,
+          type = 'scatter',
+          mode = 'lines',
+          fill = 'tozeroy',
+          fillcolor='rgba(114, 186, 59, 0.5)',              
+          line = list(color = 'rgb(114, 186, 59)'),
+          text = ~paste("Date: ", Date, "<br>Close:", Close),         # Interactive Text
+          hoverinfo = 'text') %>%
+  layout(
+    title = "",
+    # plot_bgcolor = "#f8f8f8",
+    yaxis = list(
+      # title = "Close",
+      zeroline = F,
+      tickformat = "digits"
+    ),
+    xaxis = list(
+      # title = "Date",
+      # range = c(0,365),
+      zeroline = F,
+      showgrid = F
+    )
+  )
+```
+
+----
+
+## **Version 2**
+
+```{r}
+accumulate_by <- function(dat, var) {
+  var <- lazyeval::f_eval(var, dat)
+  lvls <- plotly:::getLevels(var)
+  dats <- lapply(seq_along(lvls), function(x) {
+    cbind(dat[var %in% lvls[seq(1, x)], ], frame = lvls[[x]])
+  })
+  dplyr::bind_rows(dats)
+}
+
+
+df <- kakao %>%
+  filter(Date >= today()-months(12))
+
+df$ID <- 1:dim(df)[1]                         # 1부터 행 갯수만큼의 숫자
+
+df <- df %>% accumulate_by(~Date) %>%         # Play에 맞게 그려질..
+  mutate_at(vars(frame), as.character)
+
+fig <- df %>% plot_ly(
+  x = ~ID,
+  y = ~Close,
+  frame = ~frame,
+  type = 'scatter',
+  mode = 'lines',
+  fill = 'tozeroy',
+  fillcolor='rgba(114, 186, 59, 0.5)',
+  line = list(color = 'rgb(114, 186, 59)'),
+  text = ~paste("Date: ", Date, "<br>Close:", Close),      # Interactive Text
+  hoverinfo = 'text'
+) %>% layout(
+  title = title,
+  yaxis = list(
+    title = "Close",
+    zeroline = F
+  ),
+  xaxis = list(
+    # type = 'date',
+    # tickformat = ".",
+    tickvals = list(df$ID),     # 원래 값
+    ticktext = list(df$Date),   # 대응되는 바꿀값 (x축 바꾸기)
+    title = "Date",
+    # range = c(0,365),
+    zeroline = F,
+    showgrid = F
+  )
+)
+fig <- fig %>%
+  animation_opts(
+    frame = 1,        
+    transition = 0,
+    redraw = FALSE
+  )
+fig <- fig %>% animation_slider(
+  currentvalue = list(
+    prefix = "Date"
+  )
+)
+
+fig
+```
+
+-----------
+
+# **Line Plot**
+
+-------
+
+## **Version 1**
+
+```{r}
+plot_ly(kakao, type = 'scatter', mode = 'lines')%>%
+  add_trace(x = ~Date, y = ~Close, name = 'KAKAO',
+            line = list(color = "#663399", width = 2, dash = "dash"))%>%   
+  layout(showlegend = F,
+         xaxis = list(rangeslider = list(visible = T),   # X축 아래에 rangeslider 표시                         
+                      rangeselector=list(                # 오른쪽 위에 버튼 표시
+                        buttons=list(
+                          list(count=1, label="1m", step="month", stepmode="backward"),
+                          list(count=6, label="6m", step="month", stepmode="backward"),
+                          list(count=1, label="YTD", step="year", stepmode="todate"),   # 이번년도만
+                          list(count=1, label="1y", step="year", stepmode="backward"),
+                          list(step="all")))),
+         yaxis = list(
+           tickformat = "digits"
+         )) 
+
+```
+
+-------
+
+## **Version 2**
+
+```{r}
+accumulate_by <- function(dat, var) {
+  var <- lazyeval::f_eval(var, dat)
+  lvls <- plotly:::getLevels(var)
+  dats <- lapply(seq_along(lvls), function(x) {
+    cbind(dat[var %in% lvls[seq(1, x)], ], frame = lvls[[x]])
+  })
+  dplyr::bind_rows(dats)
+}
+
+df <- rbind( cbind(kakao, name = "kakao", "ID" = year(kakao$Date) + yday(kakao$Date)/366),
+             cbind(samsung, name = "samsung", "ID" = year(samsung$Date) + yday(samsung$Date)/366)) %>%
+  filter(Date >= today()-months(1)) 
+
+df <- df %>%
+  accumulate_by(~ID)
+
+fig <- df %>%
+  plot_ly(
+    x = ~ID, 
+    y = ~Close,
+    split = ~name,
+    frame = ~frame,
+    type = 'scatter',
+    mode = 'lines', 
+    line = list(simplyfy = F)
+  ) %>% layout(
+  xaxis = list(
+    zeroline = F
+    # tickvals = list(df$ID),     # 원래 값
+    # ticktext = list(df$Date)    # 대응되는 바꿀값 (x축 바꾸기)
+  ),
+  yaxis = list(
+    zeroline = F,
+    tickformat = "digits"
+  )
+)  %>% animation_opts(
+  frame = 200, 
+  transition = 0, 
+  redraw = FALSE
+)
+fig <- fig %>% animation_slider(
+  hide = T
+)
+fig <- fig %>% animation_button(
+  x = 1, xanchor = "right", y = 0, yanchor = "bottom"
+)
+
+fig
+```
+
+---------
+
+# **Bar Plot**
+
+-----
+
+## **Version 1**
+
+```{r}
+df  <- kakao %>%
+  filter(Date >= today()-months(1)) %>%
+  mutate( Return = c(NA, round( diff(Close)/ Close[1:(length(Close)-1)] *100, 2) )) %>%  # 맨 앞은 diff하면 무조건 NA
+  mutate("Movement" = ifelse(Return > 0, "Up", "Down"))
+
+plot_ly(df, x = ~Date, y = ~Return, type = 'bar', 
+        color = ~Movement, colors = c("blue", "red"),
+        text = ~Return, textposition = "outside")  %>%
+  layout(yaxis = list(tickformat = "digits",
+                      title = "Return (%)"),
+         showlegend = FALSE)
+
+
+```
+
+------
+
+## **Version 2**
+
+```{r}
+df <- data.frame("Date" = kakao$Date, "k.v" = kakao$Volume, "s.v" = samsung$Volume) %>%
+  filter(Date >= today()-months(1)) 
+
+plot_ly(df, x = ~Date, y = ~k.v, type = 'bar', name = 'kakao',
+        marker = list(color = '#6666CC',
+                      line = list(color = '#333399'))) %>% 
+  add_trace(y = ~s.v, name = 'Samsung',
+            marker = list(color = '#66CC66',
+                          line = list(color = '#336633'))) %>% 
+  layout(yaxis = list(title = "Volume",
+                      tickformat = "digits" ))
+```
+

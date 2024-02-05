@@ -1,0 +1,297 @@
+---
+title: "Crawling Lotto"
+description: |
+  Various Applications through Crawling the Lottery Winning Number
+author:
+  - name: Yeongeun Jeon
+date: 10-26-2021
+preview: preview.PNG
+categories: Crawling
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> 로또 번호 웹 크롤링 방법을 공부해서 정리한 코드
+
+
+# **웹페이지로부터 크롤링**
+
+```{r}
+pacman::p_load("XML", "dplyr", "reshape2",
+               "ggplot2", "gridExtra", 
+               "forcats")                 # For fct_infreq
+
+
+# Crawling ----------------------------------------------------------------
+
+address <- "https://dhlottery.co.kr/gameResult.do?method=allWinExel&gubun=byWin&nowPage=&drwNoStart=1&drwNoEnd=9999"  # F12를 통해 볼 수 있음.
+
+download.file(address, destfile = "test.xls") # 주소 데이터를 xls로 저장.
+
+Sys.setlocale(category = "LC_ALL", locale = "us") # 영어로 언어설정
+
+tables <- XML::readHTMLTable("test.xls",skip.rows= 1)
+
+history_lotto <- tables[[2]]
+
+Sys.setlocale("LC_ALL", "korean")
+```
+
+
+---------------
+
+
+# **Preprocessing**
+
+```{r}
+NA.num <- history_lotto[!is.na(history_lotto$V20), ] %>% # 마지막 행이 NA가 아닌 행 찾기 => V1이 년도로 인해 밀린 행들
+   .[,2:20]                                              # 첫번째 행 삭제
+
+names(NA.num) <- paste0("V", 1:19)                       # For bind_rows
+
+# 분석에 쓰일 최종 데이터
+history_lotto1 <- history_lotto[is.na(history_lotto$V20), 1:19] %>%
+  bind_rows(NA.num) %>%
+  arrange(as.numeric(V1)) %>%
+  mutate_at(vars(V13, V14, V15, V16, V17, V18, V19), as.numeric)  # Convert Factor
+
+names(history_lotto1)[13:19] <- c("One", "Two", "Three", "Four", "Five", "Six", "Bonus")
+
+# str(history_lotto1)
+
+# Year 변수 추가
+history_lotto1$year  <- history_lotto1$V2 %>%
+  as.Date(format = "%Y.%m.%d") %>%
+  lubridate::year()
+  
+# Month 변수 추가
+history_lotto1$month  <- history_lotto1$V2 %>%
+  as.Date(format = "%Y.%m.%d") %>%
+  lubridate::month()
+```
+
+
+---------------
+
+# **Newest Episode**
+
+```{r}
+winning_number_mat <- history_lotto1[,c(1:2, 13:18)] %>%
+  arrange(desc(as.numeric(V1)))
+
+names(winning_number_mat)[1:2] <- c("Episode ", "Date")
+
+the_latest_number<-function(x=5){
+  
+  winning_number_mat[1:x,]
+  
+}
+
+the_latest_number(x=10)
+```
+
+---------------
+
+# **Analysis**
+
+## **전체 회차에서 등장 빈도가 높은 번호 순서**
+
+```{r, fig.width=14, fig.height=12}
+
+# 보너스를 제외한 모든 번호
+Num.all <- history_lotto1[,c(1, 13:18, 20:21)] %>%
+  reshape2::melt(id.var = c("V1", "year", "month"),
+                 variable.name="Location",
+                 value.name="Number")                                  
+
+# Bonus 번호
+Bonus <- history_lotto1[,c(1, 19, 20:21)]
+
+
+# 시각화
+
+# options(repr.plot.width = 1, repr.plot.height = 0.75)
+ggplot(data.frame(Num.all), aes(fct_infreq(as.factor(Number)))) +   # fct_infreq : Ordering 
+  geom_bar(fill="#6666FF",color="black") + 
+  labs(x="Number", y="Count", title = "Frequency of Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+## 연도별
+ggplot(data.frame(Num.all), aes(as.factor(Number))) +  
+  geom_bar(fill="#6666FF",color="black") + 
+  facet_wrap(~year, ncol = 2) +
+  labs(x="Number", y="Count", title = "Frequency of Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+## 월별
+ggplot(data.frame(Num.all), aes(as.factor(Number))) +  
+  geom_bar(fill="#6666FF",color="black") + 
+  facet_wrap(~month, ncol = 2) +
+  labs(x="Number", y="Count", title = "Frequency of Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+# For Bonus 
+ggplot(data.frame(Bonus), aes(fct_infreq(as.factor(Bonus)))) +   # fct_infreq : Ordering 
+  geom_bar(fill="#FFCC66",color="black") + 
+  labs(x="Number", y="Count", title = "Frequency of Bonus Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+## 연도별
+ggplot(data.frame(Bonus), aes(fct_infreq(as.factor(Bonus)))) +   # fct_infreq : Ordering 
+  geom_bar(fill="#FFCC66",color="black") + 
+  facet_wrap(~year, ncol = 2) +
+  labs(x="Number", y="Count", title = "Frequency of Bonus Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+ggplot(data.frame(Bonus), aes(fct_infreq(as.factor(Bonus)))) +   # fct_infreq : Ordering 
+  geom_bar(fill="#FFCC66",color="black") + 
+  facet_wrap(~month, ncol = 2) +
+  labs(x="Number", y="Count", title = "Frequency of Bonus Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+```
+
+
+---------------
+
+## **최근 20 회차에서 등장 빈도가 높은 번호 순서**
+
+```{r, fig.width=14, fig.height=12}
+
+Recent.episode    <- max(as.numeric(history_lotto1$V1))       # 최신 회차
+Recent.episode.20 <- seq(Recent.episode, Recent.episode-20)   # 최신 회차에서 20전 회차
+
+# 보너스를 제외한 모든 번호
+Num.all.20 <- Num.all %>%
+  filter(as.numeric(V1) >= min(Recent.episode.20))
+
+# Bonus 번호
+Bonus.20 <- Bonus %>%
+  filter(as.numeric(V1) >= min(Recent.episode.20))
+
+
+# 시각화
+ggplot(data.frame(Num.all.20), aes(fct_infreq(as.factor(Number)))) +   # fct_infreq : Ordering 
+  geom_bar(fill="#6666FF",color="black") + 
+  labs(x="Number", y="Count", title = "Frequency of Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+# For Bonus 
+ggplot(data.frame(Bonus.20), aes(fct_infreq(as.factor(Bonus)))) +   # fct_infreq : Ordering 
+  geom_bar(fill="#FFCC66",color="black") + 
+  labs(x="Number", y="Count", title = "Frequency of Bonus Number") +
+  geom_text(stat='count', aes(label=..count..), vjust=-1) +         # Label
+  theme_bw()
+
+```
+
+
+---------------
+
+# **Random Extraction**
+
+## **각 번호당 뽑혔던 빈도를 가중치로 하여 가장 뽑힐 확률이 놓은 6개의 숫자 추출**
+
+```{r}
+frequency <- table(Num.all$Number) %>%
+  data.frame()
+
+
+lotto11 <- function(data, n=3){
+  
+  for(i in 1:n){
+    
+    p = matrix(0)
+    
+    sumData = sum(data$Freq)
+    
+    p = data$Freq/sumData # 빈도 가중치
+    
+    x = runif(45,0,1) # 랜덤 가중치
+    
+    p = p*x  # 두 가중치를 곱함
+    
+    sortP <- sort(p, decreasing=TRUE) # 정렬
+    
+    cat("당첨번호: ")
+    
+    for(m in 1:7){
+      
+      for(j in 1:length(p)){
+        
+        if(sortP[m]==p[j]){ cat(j,"  "); break }
+        
+      }
+      
+    }
+    
+    cat("\n")
+    
+  }
+  
+}
+
+
+lotto11(data = frequency, n = 5)
+```
+
+---------------
+
+```{r}
+# For Bonus
+
+frequency.Bonus <- table(Bonus$Bonus) %>%
+  data.frame()
+
+lotto11.Bonus <- function(data, n=3){
+  
+  for(i in 1:n){
+    
+    p = matrix(0)
+    
+    sumData = sum(data$Freq)
+    
+    p = data$Freq/sumData # 빈도 가중치
+    
+    x = runif(45,0,1) # 랜덤 가중치
+    
+    p = p*x  # 두 가중치를 곱함
+    
+    sortP <- sort(p, decreasing=TRUE) # 정렬
+    
+    cat("당첨번호: ")
+    
+    for(m in 1:1){
+      
+      for(j in 1:length(p)){
+        
+        if(sortP[m]==p[j]){ cat(j,"  "); break }
+        
+      }
+      
+    }
+    
+    cat("\n")
+    
+  }
+  
+}
+
+lotto11.Bonus(frequency.Bonus, n=5)
+```
+
+
+

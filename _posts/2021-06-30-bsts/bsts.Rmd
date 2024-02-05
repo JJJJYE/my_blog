@@ -1,0 +1,350 @@
+---
+title: "Bayesian Structural Time Seires"
+description: |
+     Bayesian Structural Time Seires for Time Series Data
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 06-30-2021
+preview: preview.PNG
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- Data 출처 : [Data Mining for Business Analytics](https://www.dataminingbook.com/book/r-edition)에서 사용한 미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수
+
+-----------
+
+
+# **Introduction**
+
+- Bayesian Structural Time Series (BSTS)는 `Structural Time Seires (STS) 모형에 Bayesian 방법을 적용`하는 방법이다.
+- STS는 Linear Gaussian State Space Model로써 `Dynamic Linear Model (DLM)과 동일한 개념`이다. 
+- STS의 장점은 다음과 같다.
+   - 유연성(Flexible) : 모든 ARIMA 및 VARMA 모델을 포함하여 매우 큰 클래스의 모델을 상태 공간 형식으로 표현할 수 있다.
+   - 모듈식(Modular) : 데이터의 중요한 특징을 포착하기 위해 모형은 상태 성분(State-component) 하위 모델(Sub-model)의 라이브러리로부터 조립될 수 있다.
+     - 추세(Trend), 계절성(Seasonality) 등을 포착하기 위해 널리 사용되는 여러 상태 성분을 사용할 수 있다.
+- $t$시점에서 관측된 시계열 데이터 $y_{t}$가 $m$차원이고, 관측되지 않는(Unobserved) 상태 성분이 $p$차원일 때, STS는 방정식은 다음과 같다.
+
+
+$$
+\begin{aligned}
+Y_{t}&=Z^{T}_{t}\alpha_{t}+\epsilon_{t},~~~~~~~\epsilon_{t}\sim N_{m}(0,H_{t}), \\
+\alpha_{t+1}&=T_{t}\alpha_{t}+R_{t}\eta_{t},~~~\eta_{t}\sim N_{q}(0,Q_{t}),\\
+\alpha_{1} &\sim N_{p} (\mu_{1}, P_{1})
+\end{aligned}
+$$
+
+- 첫번째는 관측방정식, 두번째는 상태방정식이다.
+   - $Y_{t}$ : 시점 $t$에서 관측값
+   - $\alpha_{t}$ : 시점 $t$에서 관측할 수 없는 상태 (시계열에서 추세, 계절성 등이 상태가 될 수 있음)
+      - 직접 관찰할 수 없지만 시간이 지남에 따라 어떻게 변화하는지 알고 있다고 가정하는 것이 합리적
+      - 시간이 지남에 따라 어떻게 변화하는지 정의
+   - $Z_{t}$, $T_{t}$, $R_{t}$ : 0과 1을 포함하여 알고 있는 값과 미지의 모수를 포함하는 행렬
+      - $Z_{t}$ : $p\times m$ 결과 행렬 (Output Matirx)
+      - $T_{t}$ : $p\times p$ 전이 행렬 (Transition Matrix)
+      - $R_{t}$ : $p\times q$ 제어 행렬 (Control Matrix)
+   - $\epsilon_{t}$, $\eta_{t}$ : 오차로써, 연속적으로 상관관계가 없으며 또한 모든 기간 동안 서로 상관관계가 없는 것으로 가정한다.
+      - $\epsilon_{t}$ : $m\times m$ 분산공분산행렬(Variance-covariance Matrix) $H_{t}$을 가진 $m\times 1$ 벡터
+      - $\eta_{t}$ : $q\times q$ 상태확산행렬(State Diffusion Matrix) $Q_{t}$을 가진 $q \times 1$ 벡터 ($q\le d$)
+  
+----------
+
+# **BSTS Package**
+
+- BSTS는 R package `bsts`를 통해 다룰 수 있다.
+    - `bsts`는 Markov chain Monte Carlo (MCMC) 방법으로 BSTS의 사후분포로부터 표본을 추출하여 적합과 예측이 수행된다.
+- 다음으로, 관측값 $y_{t}$가 univariate time series일 때 BSTS에서 가장 유용하게 쓰이는 대표적인 모형들에 대해 설명한다. 다른 모형들에 대해서는 [여기](http://oliviayu.github.io/post/2019-03-21-bsts/)를 참조한다.
+
+------------
+
+## **Trend**
+    
+### **Local Level Model**
+
+- 관측값 $y_{t}$를 추세의 평균인 Level $\mu_{t}$로만 나타낸 간단한 모형식이다.
+    - Random Walk + 오차  
+- $Z^{T}_{t} = 1$, $T_{t}  = 1$, $\alpha_{t}=\mu_{t}$, $R_{t} = 1$, $\eta_{t} = \xi_{t}$일 때, 모형식은 다음과 같다. 
+
+$$
+\begin{aligned}
+Y_{t} &= \mu_{t} + \epsilon_{t},~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\mu_{t+1} &= \mu_{t} +  \xi_{t}, ~~~\xi_{t}\sim N(0,\sigma^2_{\xi }),
+\end{aligned}
+$$
+
+- R package `"bsts"`에서 `AddLocalLevel()`을 사용하면 된다.
+
+
+```{r, eval=FALSE}
+ss <- list()
+ss <- bsts::AddLocalLevel(ss, y)   # y : The time series to be modeled
+```
+
+----------
+
+### **Local Linear Trend Model**
+
+- 관측값 $y_{t}$를 추세의 평균인 Level $\mu_{t}$와 추세의 기울기(=추세의 증가률) $\delta_{t}$로 나타낸 모형식이다.
+- Linear Trend Model보다 유연하며, 단기 예측에 유용하다.
+- $Z^{T}_{t} = (1, 0)$, $T_{t}  = \left[\begin{matrix}
+                                        1 &  1\\ 0 &  1
+                                  \end{matrix}\right]$, $\alpha_{t}=(\mu_{t}, \delta_{t})^{T}$, $R_t=\left[\begin{matrix}
+                      1 & 0 \\ 0 & 1 \end{matrix}\right]$, $\eta_{t}=(\xi_{t},\zeta_{t})^{T}$일 때, 모형식은 다음과 같다. 
+
+$$
+\begin{aligned}
+Y_{t} &= \mu_{t} + \epsilon_{t},~~~~~~~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\mu_{t+1} &= \mu_{t} + \delta_{t} + \xi_{t}, ~~~\xi_{t}\sim N(0,\sigma^2_{\xi }),\\
+\delta_{t+1} &= \delta_{t} + \zeta_{t}, ~~~~~~~~~~~~\zeta_{t}\sim N(0,\sigma^2_{\zeta}),
+\end{aligned}
+$$
+
+- R package `"bsts"`에서 `AddLocalLinearTrend()`을 사용하면 된다.              
+                      
+
+```{r, eval=FALSE}
+ss <- list()
+ss <- bsts::AddLocalLinearTrend(ss, y)   # y : The time series to be modeled
+```
+
+----------
+
+## **Seasonality**
+
+### **Regression with Seasonal Dummy Variables**
+
+- 계절성을 포착하기 위해 흔히 사용되는 상태 성분 모형이다. 
+    - 서로 다른 주기를 가진 다중 계절 성분을 허용하는 모형으로 확장할 수 있다.
+- 관측값 $y_{t}$의 계절 주기가 $S$,  $Z^{T}_{t} = (1, 0,\ldots, 0)$, $T_{t} = \left[\begin{matrix} -1 & - 1 & \cdots & -1 & -1 \\ 
+                                                     1 & 0 & \cdots & 0 & 0\\
+                                                     0 & 1 & \cdots & 0 & 0 \\
+                                                     \vdots &\vdots &\vdots & \vdots &\vdots \\
+                                                     0 & 0 & \cdots & 1 & 0 \end{matrix}\right]$, $\alpha_{t}=(\tau_{t}, \ldots, \tau_{t-S+2})^{T}$,             $R_{t}=(1,0,\ldots,0)^{T}$, $\eta_{t}=\omega_{t}$일 때, 모형식은 다음과 같다. 
+
+$$
+\begin{aligned}
+Y_{t} &= \tau_{t} + \epsilon_{t},~~~~~~~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\tau_{t+1} &= -\sum_{s=1}^{S-1} \tau_{t+1-s} + \omega_{t}, ~~~\omega_{t}\sim N(0,\sigma^2_{\omega}),
+\end{aligned}
+$$
+
+- R package `"bsts"`에서 `AddSeasonal()`을 사용하면 된다.
+
+
+```{r, eval=FALSE}
+ss <- list()
+ss <- bsts::AddSeasonal(ss, y,           # y : The time series to be modeled
+                        nseasons,        # season.duration의 반복 수
+                        season.duration) # 각 시즌에서 관측수
+
+# cycle (s) = season.duration * nseasons
+```
+
+
+
+----------
+
+# **Application**
+
+- Ridership on Amtrak Trains(미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수) 예제를 이용하여 BSTS가 실제 데이터에 어떻게 적용되는지 설명한다.
+
+----------
+
+## **Data 불러오기**
+
+```{r}
+pacman::p_load("dplyr", "bsts", "forecast", "ggplot2")
+
+# In Mac
+# guess_encoding("Amtrak.csv")
+# Amtrak.data <- read.csv("Amtrak.csv", fileEncoding="EUC-KR")
+
+Amtrak.data  <- read.csv("C:/Users/User/Desktop/Amtrak.csv")
+ridership.ts <- ts(Amtrak.data$Ridership, start=c(1991,1), end=c(2004,3), freq=12)
+```
+
+----------
+
+## **Data 분할**
+
+
+```{r}
+train.ts  <- window(ridership.ts,start=c(1991,1), end=c(2001,3))   # Training Data
+test.ts   <- window(ridership.ts,start=c(2001,4))                  # Test Data
+n.test    <- length(test.ts)
+
+```
+
+----------
+
+## **정규성 확인**
+
+```{r}
+par(mfrow=c(2,1))
+hist(train.ts, prob=TRUE, 12)
+lines(density(train.ts), col="blue")
+qqnorm(train.ts)
+qqline(train.ts)
+```
+
+- 두 그래프를 보면 Ridership은 정규분포를 따른다는 것을 알 수 있다.
+
+----------
+
+## **모형 적합**
+
+- `bsts` package에 있는 `bsts()`을 이용하여 모형을 적합시킬 수 있다.
+
+```{r, eval=FALSE}
+bsts(formula, state.specification, family = c("gaussian", "logit", "poisson", "student"), data, niter, seed = NULL, ...)
+```
+
+- formula : 시계열 데이터 $y_{t}$와 예측변수 $x_{i,t}$ 사이의 관계를 설명하는 형태
+    - 예측변수가 존재하지 않을 때 : y
+    - 예측변수가 존재할 때 : $y\sim x$
+- state.specification : [BSTS Package][**BSTS Package**]에서 소개된 상태 성분에 대한 모형식
+- family : 관측방정식의 분포
+- data : formula에서 나타낸 변수를 포함하는 Data Frame 형태의 변수
+- niter : 추출하기 원하는 MCMC 수
+- seed : 실행시킬 때마다 다른 결과가 나오지 않게 고정할 시드 값
+
+----------
+
+- 예제 데이터에서는 대중적이고 유용한 `Basic STS Model`을 이용하여 적합하고자 한다.
+- 회귀 성분(=예측 변수)를 포함하는 `Basic STS Model`은 다음과 같다.
+    
+
+$$
+\begin{aligned}
+Y_{t} &= \mu_{t} + \tau_{t} + \beta^{T}x_{t} + \epsilon_{t},~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\mu_{t+1} &= \mu_{t} + \delta_{t} + \xi_{t}, ~~~~~~~~~\xi_{t}\sim N(0,\sigma^2_{\xi }),\\
+\delta_{t+1} &= \delta_{t} + \zeta_{t}, ~~~~~~~~~~~~~~~~~~~~~\zeta_{t}\sim N(0,\sigma^2_{\zeta})\\
+\tau_{t+1}&=-\sum_{s=1}^{S-1} \tau_{t+1-s} + \omega_{t}, ~~~~~~~~~~\omega_{t}\sim N(0,\sigma^2_{\omega })
+\end{aligned}
+$$
+ - Basic STS Model은 $Z^{T}_{t} = (1,0,1,\ldots, 0)$, $T_{t} = \left[\begin{smallmatrix} 1 & 1 & \\ 
+        0 & 1 & \\ &   & -1 & - 1 & \cdots & -1 & -1 \\ 
+        &   & 1 & 0 & \cdots &0& 0\\
+        &   & 0 & 1 & \cdots & 0 &0 \\
+        &   & \vdots &\vdots &\vdots &\vdots &\vdots &\\
+        &   & 0 & 0 & \cdots & 1 & 0 
+        \end{smallmatrix}\right]$, 
+        $\alpha_{t} = (\mu_{t}, \delta_{t}, \tau_{t}, \ldots, \tau_{t-S+2})^{T}$,  $R_{t}=\left[\begin{smallmatrix}1 & 0 \\ 
+        0 & 1 \\
+        &  & 1 \\
+        & &  0 \\
+        & &  \vdots \\
+        & &  0 \\
+        \end{smallmatrix}\right]$, $\eta_{t}=(\xi_{t}, \zeta_{t},\omega_{t})^{T}$.
+
+----------
+
+```{r}
+# Local Linear Trend
+ss <- list()
+ss <- bsts::AddLocalLinearTrend(ss, train.ts)
+# Seasonal
+ss <- bsts::AddSeasonal(ss, train.ts, nseasons = 12, season.duration = 1) 
+
+BSTS.fit <- bsts(train.ts, state.specification = ss, niter = 1000, seed=100)  # niter : MCMC 반복
+summary(BSTS.fit)
+```
+
+
+
+------
+
+## **예측**
+
+```{r}
+burn          <- SuggestBurn(0.1, BSTS.fit)     # MCMC에서 버릴 갯수
+BSTS.forecast <- predict(BSTS.fit, horizon = n.test, burn = burn,  quantiles = c(0.025, 0.975))  # horizon : the number of prediction
+BSTS.forecast$mean
+```
+
+
+```{r}
+plot(BSTS.forecast, plot.original = 100)
+accuracy(test.ts, BSTS.forecast$mean)
+```
+
+
+------
+
+## **모형 적합 with 예측 변수**
+
+```{r}
+## Month 변수 생성
+xts(ridership.ts, order = as.Date(ridership.ts))
+Month  <- as.Date(ridership.ts) %>%                  # Date 추출
+  lubridate::month()                                 # Month 추출
+
+Train.Data <- data.frame("y"=train.ts, "Month"= Month[1:length(train.ts)])
+Test.Data  <- data.frame("y"=test.ts, "Month"= Month[-(1:length(train.ts))])
+
+
+BSTS.fit2 <- bsts(y ~ Month, state.specification = ss, data = Train.Data, niter = 1000, seed=100)  # niter : MCMC 반복
+summary(BSTS.fit2)
+```
+
+------
+
+### **회귀 계수**
+
+```{r}
+# Ref. https://michaeldewittjr.com/programming/2018-07-05-bayesian-time-series-analysis-with-bsts_files/
+
+burn2 <- SuggestBurn(0.1, BSTS.fit2)
+
+### MCMC sample에 0인 값들 삭제하고 평균 내기 위한 함수
+PositiveMean <- function(b) {
+  b <- b[abs(b) > 0]
+  if (length(b) > 0) 
+    return(mean(b))
+  return(0)
+}
+
+### Get the average coefficients when variables were selected (non-zero slopes)
+coeff <- data.frame(reshape2::melt(apply(BSTS.fit2$coefficients[-(1:burn2),], 2, PositiveMean)))  # Fun : mean (0 포함 평균)
+coeff$Variable <- as.character(row.names(coeff))
+coeff
+ggplot(data=coeff, aes(x=reorder(Variable,value), y=value)) + 
+  coord_flip()+
+  geom_bar(stat="identity", position="identity") + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0)) +
+  xlab("") + ylab("") + ggtitle("Average coefficients")
+```
+
+```{r}
+### Inclusion probabilities -- i.e., how often were the variables selected 
+inclusionprobs <- reshape2::melt(colMeans(BSTS.fit2$coefficients[-(1:burn2),] != 0))
+inclusionprobs$Variable <- as.character(row.names(inclusionprobs))
+ggplot(data=inclusionprobs, aes(x=reorder(Variable, value), y=value)) + 
+  geom_bar(stat="identity", position="identity") + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0)) + 
+  coord_flip()+
+  xlab("") + ylab("") + ggtitle("Inclusion probabilities")
+
+```
+
+------
+
+### **예측 with 예측 변수**
+
+```{r}
+# 예측
+BSTS.forecast2 <- predict(BSTS.fit2, horizon = n.test, burn = burn2, newdata = Month[-(1:length(train.ts))], # newdata : 예측변수를 포함하는 변수
+                          quantiles = c(0.025, 0.975))  # horizon : the number of prediction
+BSTS.forecast2$mean
+
+
+plot(BSTS.forecast2, plot.original = 100)
+accuracy(BSTS.forecast2$mean, test.ts)
+```

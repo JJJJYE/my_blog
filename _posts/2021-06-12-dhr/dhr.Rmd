@@ -1,0 +1,208 @@
+---
+title: "Dynamic Harmonic Regression"
+description: |
+  Dynamic Harmonic Regression for Time Series Data
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 06-12-2021
+preview: preview.PNG
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- Data 출처 : [Data Mining for Business Analytics](https://www.dataminingbook.com/book/r-edition)에서 사용한 미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수
+
+-----------
+
+
+# **Introduction**
+
+- 기술이 점점 발달함에 따라 시계열 데이터들은 시간당, 분당, 초당으로 관측 가능해지며, 이렇게 관측된 시계열 데이터는 종종 긴 계절 주기를 가진다.
+- `계절 주기가 길 때`, 계절성 ARIMA보다 선호되는 모델이 `Dynamic Harmonic Regression (DHR)`이다.
+- 게다가, `다중 계절성`을 가진 시계열 데이터에도 DHR은 유용하다.
+- DHR은 sine과 cosine 함수의 선형 조합으로써 `계절성을 설명하는 퓨리에 항(Fourier Terms)`을 가진 회귀 모형이다. 
+- 계절 주기가 $m$인 시계열 데이터 $Y_{t}$에 대한 DHR 모형식은 다음과 같다. 
+
+$$
+\begin{aligned}
+	       Y_t = \beta_{0} + \sum^{K}_{i=1} \left[\alpha_{i,t} sin(2πit/m ) + \gamma_{i,t} cos(2πit/m )   \right] + \eta_t,   
+\end{aligned}
+$$
+
+- $\alpha_{i,t}$ & $\gamma_{i,t}$ : 관측되지 않은 확률적 시간 변수 모수
+- $K$ : sine과 cosine 쌍의 개수로써 $m/2$ 이하의 고정된 값
+- $\eta_t$ : 오차로써 ARIMA 모형을 적합
+
+---------
+
+# **Application**
+
+- Ridership on Amtrak Trains(미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수) 예제를 이용하여 DHR이 실제 데이터에 어떻게 적용되는지 설명한다.
+
+-----------
+
+## **Data 불러오기**
+
+```{r}
+pacman::p_load("forecast", "dplyr", "ggplot2", "xts")
+
+# In Mac
+# guess_encoding("Amtrak.csv")
+# Amtrak.data <- read.csv("Amtrak.csv", fileEncoding="EUC-KR")
+
+Amtrak.data <- data.table::fread(paste(getwd(),"Amtrak.csv", sep="/"))
+ridership.ts <- ts(Amtrak.data$Ridership, start=c(1991,1), end=c(2004,3), freq=12)
+```
+
+------------
+
+## **Data 분할**
+
+```{r}
+train.ts <- window(ridership.ts,start=c(1991,1), end=c(2001,3))
+test.ts  <- window(ridership.ts,start=c(2001,4))
+n.test   <- length(test.ts)
+```
+
+------------
+
+## **모형 적합**
+
+- 퓨리에 항은 `forecast` package에 있는 `fourier` 함수를 이용한다.
+
+
+```{r, eval= FALSE}
+fourierf(x, K, h)
+```
+
+- x : 계절 주기를 가지는 시계열 데이터
+- K : sine, cosine 쌍의 개수로써 시계열 데이터가 2개 이상의 계절 주기를 가질 때 계절 주기 개수만큼 필요
+- h : 예측을 위한 주기 수
+
+------------
+
+```{r}
+DHR.fit <- auto.arima(train.ts, 
+                      xreg = fourier(train.ts, K=2),   # K : sine, cosine 쌍의 개수/시계열 데이터의 계절 주기가 2개 이상일 때, K는 계절 주기 수만큼 필요
+                      seasonal = FALSE)
+DHR.fit
+```
+
+- 적합된 DHR 모형식은 다음과 같다.
+
+$$
+\begin{aligned}
+	       y_t &=  0.4116 -52.3107 sin(2\pi t/12 ) -107.3608 cos(2\pi t/12 )  -35.2247 sin(4\pi t/12)  +23.7494 cos(4\pi t/12) + \eta_t, \\
+	       \eta_t &= -1.2069\eta_{t-1} -1.1238\eta_{t-2}-0.7371\eta_{t-3}-0.1625\eta_{t-4} + 0.3954\eta_{t-5} + \epsilon_{t} +0.5535\epsilon_{t-1} + 0.3476\epsilon_{t-2},\\
+	       \epsilon_{t} &\sim WN(0, 6143)
+\end{aligned}
+$$
+
+
+------------
+
+```{r}
+checkresiduals(DHR.fit)
+```
+
+------------
+
+## **예측**
+
+```{r}
+DHR.forecast <- forecast(DHR.fit, xreg = fourier(train.ts, K=2, h=n.test) )
+DHR.forecast$mean
+plot(DHR.forecast)
+accuracy(test.ts, DHR.forecast$mean)
+```
+
+---------
+
+# **DHR With 예측 변수**
+
+- [Introduction][**Introduction**]에서 소개된 DHR 모형식은 $j$개의 예측 변수(Predictor Variable)들을 추가함으로써 다음과 같이 확장될 수 있다.
+
+$$
+\begin{aligned}
+	       Y_t = \beta_{0} + \sum_{i=1}^{j} \beta_{j}x_{i,t} + \sum^{K}_{i=1} \left[\alpha_{i,t} sin(2πit/m ) + \gamma_{i,t} cos(2πit/m )   \right] + \eta_t,   
+\end{aligned}
+$$
+
+
+- $\alpha_{i,t}$ & $\gamma_{i,t}$ : 관측되지 않은 확률적 시간 변수 모수
+- $\beta_{j}$ : 회귀계수
+- $x_{i,t}$ : $i$번째 예측변수
+- $K$ : sine과 cosine 쌍의 개수로써 $m/2$ 이하의 고정된 값
+- $\eta_t$ : 오차로써 ARIMA 모형을 적합
+
+---------
+
+> 위의 예제에 예측 변수가 있는 DHR을 적용해보았다.
+
+## **예측 변수 생성**
+
+```{r}
+## Month 변수 생성
+xts(ridership.ts, order = as.Date(ridership.ts))
+Month  <- as.Date(ridership.ts) %>%                  # Date 추출
+ lubridate::month()                                  # Month 추출
+
+## 퓨리에 항과 합치기
+Train.Xreg <- cbind("Month"= Month[1:length(train.ts)], fourier(train.ts, K=2)) 
+Test.Xreg  <- cbind("Month"= Month[-(1:length(train.ts))], fourier(train.ts, K=2, h=n.test)) 
+
+```
+
+---------
+
+## **모형 적합**
+
+```{r}
+DHR.fit2 <- auto.arima(train.ts, 
+                       xreg = Train.Xreg,   
+                       seasonal = FALSE)
+DHR.fit2
+
+```
+
+
+- 적합된 DHR 모형식은 다음과 같다.
+
+$$
+\begin{aligned}
+	       y_t &=  43.3345x_{Month, t} +109.4259 sin(2\pi t/12 ) -150.3196 cos(2\pi t/12 )  + 40.0290 sin(4\pi t/12)  -18.4092 cos(4\pi t/12) + \eta_t, \\
+	       \eta_t &= -1.1998\eta_{t-1} + 0.4967\eta_{t-2} + \epsilon_{t} + 0.2032\epsilon_{t-1} - 0.4963\epsilon_{t-2},\\
+	       \epsilon_{t} &\sim WN(0, 9891)
+\end{aligned}
+$$
+
+
+------------
+
+```{r}
+checkresiduals(DHR.fit2)
+```
+
+------------
+
+## **예측**
+
+```{r}
+
+DHR.forecast2 <- forecast(DHR.fit2, xreg = Test.Xreg )
+DHR.forecast2$mean
+
+plot(DHR.forecast2)
+accuracy(DHR.forecast2$mean, test.ts)
+
+```
+
+
+

@@ -1,0 +1,826 @@
+---
+title: "Support Vector Machine"
+description: |
+   R code using Various Kernel Function for Support Vector Machine
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 09-28-2020
+preview: preview.PNG
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+	                    warning = FALSE)
+```
+
+
+
+> 서포트 벡터 머신을 사용할 수 있는 대표적인 패키지는 `"e1071"`과 `"kernlab"`이다. `"kernlab"`는 `"e1071"`의 확장된 형태이며, 다양한 커널 함수를 사용할 수 있다.  
+예제 데이터는 "Universal Bank_Main"로 유니버셜 은행의 고객들에 대한 데이터(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이다. 데이터는 총 2500개이며, 변수의 갯수는 13개이다. 여기서 **Target**은 `Person.Loan`이다.
+
+<center><img src="./image/그림1.png" width="600" height="600"></center>
+
+<br />
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+----------------------
+
+# **1. 데이터 불러오기**
+
+```{r}
+pacman::p_load("data.table", "dplyr") 
+
+UB <- fread(paste(getwd(),"Universal Bank_Main.csv", sep="/")) %>%  # 데이터 불러오기
+  data.frame()                                                      # Data Frame 변환
+
+
+cols <- c("Family", "Education", "Personal.Loan",          
+          "Securities.Account", "CD.Account", "Online", "CreditCard")
+
+UB <- UB %>%
+  select(-1) %>%                                                    # 1열 제거
+  mutate_at(cols, factor)                                           # 범주형 변수 변환
+
+glimpse(UB)                                                         # 데이터 구조
+
+```
+
+
+-----------
+
+# **2. 데이터 분할**
+
+```{r}
+pacman::p_load("caret")
+# Partition (Traning Data : Test Data = 7:3)
+y      <- UB$Personal.Loan                       # Target
+
+set.seed(200)
+ind    <- createDataPartition(y, p=0.7, list=F)  # Training Data를 70% 추출
+
+UB.trd <- UB[ind,]                               # Traning Data
+
+UB.ted <- UB[-ind,]                              # Test Data
+
+detach(package:caret)
+```
+
+
+----------
+
+# **3. R Package "e1071"**
+
+Package `"e1071"`은 `"svm"` 함수로 서포트 벡터 머신을 사용할 수 있다. 자세한 옵션은 [여기를 참조한다.](https://www.rdocumentation.org/packages/e1071/versions/1.7-3/topics/svm)
+
+```{r, eval=FALSE}
+svm(formula, data, kernel , cost, cross, probability, ...)
+```
+
+
+- `formula` : Target과 예측 변수에 대한 공식으로써 일반적으로 `Target ~ 예측변수` 사용
+- `data` : `formula`의 변수들이 있는 데이터 프레임
+-  `kernel` : Kernel 함수로 default 값은 "radial" 
+- `cost` : 과적합을 막는 정도를 지정하는 모수로 데이터를 잘못 분류하는 선을 긋게 될 경우 얼마만큼의 비용(cost)을 지불할 것인지 지정하며, default 값은 "1"
+- `cross` : Cross validation의 fold 수로 training data의 정확도를 출력
+- `probability` : `TRUE` 일 때 test data에 대하여 예측 확률 출력 가능
+
+
+----------
+
+## **3-1. Linear Kernel**
+
+
+### **3-1-1. 모형 적합**
+
+```{r}
+pacman::p_load("e1071") 
+
+
+set.seed(200)
+svm.model.li <- svm(Personal.Loan~.,     
+                    data=UB.trd,  
+                    cost=1,              
+                    cross=10,           
+                    kernel="linear",     # kernel = "linear" (Linear Kernel)
+                    probability = T)     
+
+
+summary(svm.model.li)
+
+
+```
+
+- 총 서포트 벡터의 수는 199개이며, 클래스 "0"에서 101개, 클래스 "1"에서는 98개이다.
+
+```{r}
+svm.model.li$index   # Support Vector
+```
+
+### **3-1-2. 최적 모수 찾기**
+
+함수 `"svm"`은  cross validation을 통해 최적의 모수를 찾을 수 있으며 `"tune"` 함수를 이용한다.
+
+```{r, eval=FALSE}
+tune(method, train.x, train.y, data, ranges , ...) # Version 1
+tune(method, formula, data, ranges , ...)          # Version 2
+```
+
+
+- `method` : 최적화할 함수
+- `train.x` : formula 또는 예측 변수의 행렬
+- `train.y` : 만약 `train.x`가 formula일 경우 무시해도 되며, 예측 변수일 경우 Target
+- `formula` : Target과 예측 변수에 대한 공식으로써 일반적으로 `Target ~ 예측변수` 사용
+- `data` : 변수들이 있는 데이터 프레임
+- `range` : 최적화할 모수들의 후보값으로써 리스트 형태
+
+```{r}
+set.seed(200)
+tn.control  <- tune.control(cross=10)        # Number of Partitions For Cross Validation 
+tune.svm.li <- tune(svm, Personal.Loan~., data=UB.trd, kernel="linear",
+                    ranges=list(cost=c(0.1,1,10)), tunecontrol=tn.control) 
+
+summary(tune.svm.li)
+```
+
+```{r}
+plot(tune.svm.li)
+```
+
+- `cost`가 1일 때 오차가 가장 작은 것을 알 수 있다.
+
+
+```{r}
+# 최적의 모수를 이용한 최종 모형 
+
+set.seed(200)
+svm.li.best <- svm(Personal.Loan~., 
+                   data=UB.trd, 
+                   cost=1, 
+                   cross=10,
+                   kernel="linear", 
+                   probability=T)
+
+
+summary(svm.li.best)     
+```
+
+
+### **3-1-3. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+svm.li.best.pred <- predict(svm.li.best, newdata=UB.ted, probability=T)        # predict(svm모형, Test Data)    
+
+```
+
+
+#### **ConfusionMatrix**
+
+```{r}
+pacman::p_load("caret")
+
+
+confusionMatrix(svm.li.best.pred, UB.ted$Personal.Loan, positive="1")  # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+detach(package:caret)
+```
+
+<br />
+
+#### **ROC 곡선**
+
+
+##### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac <- UB.ted$Personal.Loan                                   # 실제 클래스
+pp <- attr(svm.li.best.pred, "probabilities")[,2]            # "1"에 대한 예측 확률
+
+
+svm.li.roc <- roc(ac, pp, plot=T, col="red")                 # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(svm.li.roc), 3)                             # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+```
+
+<br />
+
+##### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+
+```
+
+<br />
+
+##### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+svm.li.pred <- prediction(pp, ac)                        # prediction(예측 확률, 실제 클래스)
+
+svm.li.perf <- performance(svm.li.pred, "tpr", "fpr")    # performance(, "민감도", "1-특이도")                      
+plot(svm.li.perf, col="red")                             # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(svm.li.pred, "auc")              # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+
+```
+
+<br />
+
+
+#### **향상 차트**
+
+
+##### **1) Package "ROCR"**
+
+```{r}
+li.lift <- performance(svm.li.pred,"lift", "rpp")       # Lift chart
+plot(li.lift, colorize=T, lwd=2)			
+
+
+detach(package:ROCR)
+
+```
+
+<br />
+
+##### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+ 
+plotLift(pp, ac, cumulative = T, n.buckets =24)      # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac)                                # Top 10% 향상도 출력
+
+detach(package:lift)
+
+```
+
+
+----------
+
+## **3-2. Radial Basis Kernel**
+
+
+### **3-2-1. 모형 적합**
+
+```{r}
+set.seed(200)
+svm.model.nl <- svm(Personal.Loan~.,     
+                    data=UB.trd,        
+                    gamma=1,             # gamma : 가우시안 커널의 모수로써, 가우시안 커널의 폭을 제어하는 매개 변수
+                    cost=1,              
+                    cross=10,            
+                    kernel="radial",     # 비선형 옵션 “radial” (가우시안 커널)
+                    probability = T)     
+
+
+summary(svm.model.nl)
+```
+
+- 총 서포트 벡터의 수는 1397개이며, 클래스 "0"에서 1217개, 클래스 "1"에서는 180개이다.
+
+```{r}
+svm.model.nl$index   # Support Vector
+```
+
+
+### **3-2-2. 최적 모수 찾기**
+
+```{r}
+set.seed(200)
+tn.control  <- tune.control(cross=10)          # Number of Partitions For Cross Validation 
+tune.svm.nl <- tune(svm, Personal.Loan~., data=UB.ted, kernel="radial",
+                    ranges=list(gamma=c(0.1,1,10), cost=c(0.1,1,10)), tunecontrol=tn.control)
+
+summary(tune.svm.nl)
+
+
+
+plot(tune.svm.nl)
+```
+
+- `gamma` = 0.1, `cost` = 10일 때 error가 가장 작다.
+
+
+```{r}
+# 최적의 모수를 이용한 최종 모형
+
+set.seed(200)            
+svm.nl.best <- svm(Personal.Loan~., 
+                   data=UB.trd, 
+                   gamma=0.1, 
+                   cost=10,
+                   cross=10,
+                   kernel="radial", 
+                   probability=T)                 
+
+
+summary(svm.nl.best)
+```
+
+
+### **3-2-3. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+svm.nl.best.pred <- predict(svm.nl.best, newdata=UB.ted, probability=T)  # predict(svm모형, Test Data)    
+
+```
+
+#### **ConfusionMatrix**
+
+```{r}
+pacman::p_load("caret")
+
+
+confusionMatrix(svm.nl.best.pred, UB.ted$Personal.Loan, positive="1")    # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+
+detach(package:caret)
+```
+
+<br />
+
+#### **ROC 곡선**
+
+
+##### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac <- UB.ted$Personal.Loan                                   # 실제 클래스
+pp <- attr(svm.nl.best.pred, "probabilities")[,2]            # "1"에 대한 예측 확률
+
+
+svm.nl.roc <- roc(ac, pp, plot=T, col="red")                 # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(svm.nl.roc), 3)                             # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+```
+
+<br />
+
+##### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+
+```
+
+<br />
+
+##### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+svm.nl.pred <- prediction(pp, ac)                        # prediction(예측 확률, 실제 클래스)
+
+svm.nl.perf <- performance(svm.nl.pred, "tpr", "fpr")    # performance(, "민감도", "1-특이도")                      
+plot(svm.nl.perf, col="red")                             # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(svm.nl.pred, "auc")              # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+
+```
+
+<br />
+
+
+#### **향상 차트**
+
+
+##### **1) Package "ROCR"**
+
+```{r}
+nl.lift <- performance(svm.nl.pred,"lift", "rpp")       # Lift chart
+plot(nl.lift, colorize=T, lwd=2)			
+
+
+detach(package:ROCR)
+
+```
+
+<br />
+
+##### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+
+plotLift(pp, ac, cumulative = T, n.buckets =24)      # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac)                                # Top 10% 향상도 출력
+
+detach(package:lift)
+
+```
+
+
+----------
+
+## **3-3. 모형 비교**
+
+```{r}
+plot(svm.li.perf, col="blue")         # ROC Curve
+par(new=TRUE)
+plot(svm.nl.perf, col="red")          # ROC Curve
+
+legend("bottomright", legend=c("Linear", "RB"), col=c("blue", "red"), lty=c(1,1))
+
+```
+
+- Radial Basis Kernel이 더 우수한 것을 알 수 있다.
+
+
+----------
+
+# **4. R Package "kernlab"**
+
+Package `"kernlab"`은 `"ksvm"` 함수로 서포트 벡터 머신을 사용할 수 있다. `"ksvm"`의 장점은 Kernel 함수가 `"rbfdot"`인 경우 자동적으로 최적의 `gamma`값을 찾아준다. 자세한 옵션은 [여기를 참조한다.](https://www.rdocumentation.org/packages/kernlab/versions/0.9-29/topics/ksvm)
+
+```{r, eval=FALSE}
+ksvm(x, data, y, kernel , C, cross, prob.model, ...)      # Version 1
+ksvm(formula, data, kernel , C, cross, prob.model, ...)   # Version 2
+```
+
+
+- `x` :  formula 또는 예측 변수의 행렬
+- `formula` : Target과 예측 변수에 대한 공식으로써 일반적으로 `Target ~ 예측변수` 사용
+- `data` : `formula`의 변수들이 있는 데이터 프레임
+- `y` : 만약 `x`가 formula 경우 무시해도 되며, 예측 변수일 경우 Target
+-  `kernel` : Kernel 함수로 default 값은 "rbfdot" 
+- `C` : 과적합을 막는 정도를 지정하는 모수로 데이터를 잘못 분류하는 선을 긋게 될 경우 얼마만큼의 비용(cost)을 지불할 것인지 지정하며, default 값은 "1"
+- `cross` : Cross validation의 fold 수로 cross validation error를 출력
+- `prob.model` : `TRUE` 일 때 데이터에 대하여 3-fold cross validation을 수행하며, 예측 확률도 출력 가능
+
+
+----------
+
+## **4-1. Linear Kernel**
+
+
+### **4-1-1. 모형 적합**
+
+```{r}
+pacman::p_load("kernlab")  
+
+set.seed(200)
+ksvm.li <- ksvm(Personal.Loan ~.,         
+                data=UB.trd,          
+                C=1,                     
+                cross=10,                 
+                kernel="vanilladot",      # vanilladot :  Linear Kernel
+                prob.model=TRUE)          
+
+
+ksvm.li
+
+```
+
+
+### **4-1-2. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+ksvm.li.pred <- predict(ksvm.li, UB.ted)       # predict(svm모형, Test Data)    
+
+```
+
+
+#### **ConfusionMatrix**
+
+```{r}
+pacman::p_load("caret")
+
+
+confusionMatrix(ksvm.li.pred, UB.ted$Personal.Loan, positive="1")    # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+
+detach(package:caret)
+```
+
+<br />
+
+#### **ROC 곡선**
+
+
+##### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac <- UB.ted$Personal.Loan                                    # 실제 클래스
+pp <- predict(ksvm.li, UB.ted, type="prob")[,2]               # "1"에 대한 예측 확률
+
+
+ksvm.li.roc <- roc(ac, pp, plot=T, col="red")                 # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(ksvm.li.roc), 3)                             # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+
+```
+
+<br />
+
+##### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+
+```
+
+<br />
+
+##### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+ksvm.li.pred <- prediction(pp, ac)                         # prediction(예측 확률, 실제 클래스)
+
+ksvm.li.perf <- performance(ksvm.li.pred, "tpr", "fpr")    # performance(, "민감도", "1-특이도")                      
+plot(ksvm.li.perf, col="red")                              # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(ksvm.li.pred, "auc")               # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+
+```
+
+<br />
+
+
+#### **향상 차트**
+
+
+##### **1) Package "ROCR"**
+
+```{r}
+li.lift <- performance(ksvm.li.pred,"lift", "rpp")        # Lift chart
+plot(li.lift, colorize=T, lwd=2)	
+
+detach(package:ROCR)
+
+```
+
+<br />
+
+##### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+
+plotLift(pp, ac, cumulative = T, n.buckets =24)      # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac)                                # Top 10% 향상도 출력
+
+detach(package:lift)
+
+```
+
+
+----------
+
+## **4-2. Radial Basis Kernel**
+
+
+### **4-2-1. 모형 적합**
+
+```{r}
+set.seed(200)
+ksvm.nl <- ksvm(Personal.Loan ~.,         
+                data=UB.trd, 
+                C=10,                      
+                cross=10,                 
+                kernel="rbfdot",          # knernel = "rbfdot" (Radial Basis kernel "Gaussian") /  자동적으로 최적의 gamma값을 찾음
+                prob.model=TRUE)        
+
+
+ksvm.nl
+```
+
+
+### **4-2-2. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+ksvm.nl.pred <- predict(ksvm.nl, UB.ted)  # predict(svm모형, Test Data)    
+
+```
+
+#### **ConfusionMatrix**
+
+```{r}
+pacman::p_load("caret")
+
+
+confusionMatrix(ksvm.nl.pred, UB.ted$Personal.Loan, positive="1")    # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+
+
+detach(package:caret)
+```
+
+<br />
+
+#### **ROC 곡선**
+
+
+##### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac <- UB.ted$Personal.Loan                                    # 실제 클래스
+pp <- predict(ksvm.nl, UB.ted, type="prob")[,2]               # "1"에 대한 예측 확률
+
+
+ksvm.nl.roc <- roc(ac, pp, plot=T, col="red")                 # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(ksvm.nl.roc), 3)                             # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+```
+
+<br />
+
+##### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+```
+
+<br />
+
+##### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+ksvm.nl.pred <- prediction(pp, ac)                         # prediction(예측 확률, 실제 클래스)
+
+ksvm.nl.perf <- performance(ksvm.nl.pred, "tpr", "fpr")    # performance(, "민감도", "1-특이도")                      
+plot(ksvm.nl.perf, col="red")                              # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(ksvm.nl.pred, "auc")               # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+
+```
+
+<br />
+
+
+#### **향상 차트**
+
+
+##### **1) Package "ROCR"**
+
+```{r}
+nl.lift <- performance(ksvm.nl.pred,"lift", "rpp")        # Lift chart
+plot(nl.lift, colorize=T, lwd=2)			
+
+
+detach(package:ROCR)
+
+```
+
+<br />
+
+##### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+
+plotLift(pp, ac, cumulative = T, n.buckets =24)      # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac)                                # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+----------
+
+## **4-3. 모형 비교**
+
+```{r}
+plot(ksvm.li.perf, col="blue")         # ROC Curve
+par(new=TRUE)
+plot(ksvm.nl.perf, col="red")          # ROC Curve
+
+legend("bottomright", legend=c("Linear", "RB"), col=c("blue", "red"), lty=c(1,1))
+```
+
+- Radial Basis Kernel이 더 우수한 것을 알 수 있다.
+
+
+----------
+
+# **5. svm과 ksvm 모형 비교**
+
+
+## **5-1. 예측 오차**
+```{r}
+pacman::p_load("tidyverse")
+
+# 예측 클래스
+svm.li.best.pred <- predict(svm.li.best, newdata=UB.ted, probability=T) 
+svm.nl.best.pred <- predict(svm.nl.best, newdata=UB.ted, probability=T)
+ksvm.li.pred <- predict(ksvm.li, UB.ted)
+ksvm.nl.pred <- predict(ksvm.nl, UB.ted)
+
+
+prev.class <- data.frame(svm.li= svm.li.best.pred, svm.rbf=svm.nl.best.pred,
+                         ksvm.li=ksvm.li.pred, ksvm.rbf=ksvm.nl.pred,obs=UB.ted$Personal.Loan)
+
+
+prev.class %>% 
+  summarise_all(funs(err=mean(obs!=.))) %>% 
+  select(-obs_err) %>% 
+  round(3)
+```
+
+----------
+
+## **5-2. ROC 곡선**
+
+```{r}
+pacman::p_load("plotROC")
+
+
+plot(svm.li.perf, col="blue")         # ROC Curve
+par(new=TRUE)
+plot(svm.nl.perf, col="red")          # ROC Curve
+par(new=TRUE)
+plot(ksvm.li.perf, col="green")       # ROC Curve
+par(new=TRUE)
+plot(ksvm.nl.perf, col="orange")      # ROC Curve
+
+legend("bottomright", legend=c("svm (Linear)", "svm (RB)", "ksvm (Linear)", "ksvm (RB)" ),
+       col=c("blue", "red", "green", "orange"), lty=c(1,1,1,1))
+
+
+```
+
+

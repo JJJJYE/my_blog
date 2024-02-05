@@ -1,0 +1,196 @@
+---
+title: "STLM"
+description: |
+  STLM for Time Series Data
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 06-22-2021
+preview: preview.PNG
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- Data 출처 : [Data Mining for Business Analytics](https://www.dataminingbook.com/book/r-edition)에서 사용한 미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수
+
+-----------
+
+
+
+# **Introduction**
+
+- 시계열 데이터는 추세(Trend), 계절성(Seasonal), 오차(Remainder) 세 가지 요소로 분해할 수 있다.
+  - 분해는 시계열 데이터를 이해하는 데 도움이 되며, 시간에 따른 변화를 살펴볼 때 유용하다.
+- 특히, `STL (Seasonal and Trend decomposition using Loess)` 분해는 다양한 상황에서 사용할 수 있는 강력한 시계열 분해 기법이다.
+- 이러한 STL 기법에 덧셈 분해를 가정하여 STLM 모형은 시계열 데이터를 다음과 같이 분해한다.
+
+\begin{align}
+  Y_{t} = S_{t} + A_{t}
+\end{align}
+
+- $S_{t}$ : 계절 성분(Seasonal Component)
+- $A_{t}$ : 추세 + 오차 성분(Seasonally Adjusted Component)
+
+-----------
+
+- STLM은 $S_{t}$와 $A_{t}$를 각각 예측하고, 두 예측값을 더한 것을 최종 예측값으로 사용한다.
+  - $S_{t}$는 계절 성분이 변하지 않거나 엄청 느리고 변하는 상황을 가정하고 `Seasonal naive method`을 이용하여 예측한다.
+    - Seasonal naive method : 예측값 = 같은 계절(Season)의 마지막 관측값
+  - $A_{t}$는 `시계열 모형`을 이용하여 적합한 후 예측한다.
+  
+-----------
+
+## **Seasonal Naive Method**
+
+- $\hat{y}_{T+h|T}=y_{T+h-m(k+1)}$
+   - $m$ : 계절성의 주기 (Seasonal Period)
+   - $k$ : $(h-1)/m+1$의 정수 부분
+   
+- 다음은 $m=5$일 때 예측값을 나타낸 예제이다.
+
+<p align="center"><img src= "./image/그림1.png" height="300px" width="300px" alt = "m=5일 때" title= "m=5일 때" /></p>
+
+-----------
+
+# **Appication**
+
+- Ridership on Amtrak Trains(미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수) 예제를 이용하여 STLM이 실제 데이터에 어떻게 적용되는지 설명한다.
+
+-----------
+
+## **Data 불러오기**
+
+```{r}
+pacman::p_load("forecast", "dplyr", "ggplot2", "xts")
+
+# In Mac
+# guess_encoding("Amtrak.csv")
+# Amtrak.data <- read.csv("Amtrak.csv", fileEncoding="EUC-KR")
+
+Amtrak.data <- data.table::fread(paste(getwd(),"Amtrak.csv", sep="/"))
+ridership.ts <- ts(Amtrak.data$Ridership, start=c(1991,1), end=c(2004,3), freq=12)
+```
+
+------------
+
+## **Data 분할**
+
+```{r}
+train.ts     <- window(ridership.ts,start=c(1991,1), end=c(2001,3))   # Training Data
+test.ts      <- window(ridership.ts,start=c(2001,4))                  # Test Data
+n.test       <- length(test.ts)
+```
+
+------
+
+## **분해(Decomposition)**
+
+- R 함수 `stl()`을 이용하여 데이터를 추세와 계절성, 불규칙 성분으로 나눌 수 있다.
+  - 만약 시계열 데이터가 다중 계절성을 가진다면, `mstl()`을 이용한다.
+
+
+```{r}
+ridership.ts %>%
+  stl( s.window = "periodic", robust = TRUE) %>%
+  autoplot()
+
+
+train.ts %>%
+  stl( s.window = "periodic", robust = TRUE) %>%
+  autoplot()
+```
+
+
+------
+
+## **모형 적합**
+
+- `forecast` package에 있는 `stlm()`을 이용하여 모형을 적합시킬 수 있다. 
+- `stlm()`의 자세한 옵션 설명은 [여기](https://www.rdocumentation.org/packages/forecast/versions/8.15/topics/forecast.stl)를 참조하며, 함수 구조는 [여기](https://github.com/robjhyndman/forecast/blob/master/R/mstl.R)를 참조한다.
+
+
+```{r, eval= FALSE}
+stlm(y, s.window, robust, method=c("ets", "arima"),  modelfunction, xreg )
+```
+
+- y : 시계열 데이터
+- s.window : `계절 성분을 추출`하기 위한 모수로 계절패턴이 시간에 따라 일정하다고 판단되면 `"periodic" 혹은 7이상의 수`를, 계절패턴이 시간의 흐름에 따라 변화된다고 판단되면 최근 데이터만 사용하도록 `작은 수`를 입력
+- robust : loess 과정 에서 강력한 적합(fitting)이 사용되는지 여부
+- method : 추세 + 오차 성분에 적용할 시계열 분석방법
+- modelfunction : 추세 + 오차 성분을 분석하기 위해 method에 없는 시계열 방법을 함수문으로 명시
+- xreg : `method=arima` 일 때, `auto.arima`에 사용될 예측변수 
+
+------
+
+```{r}
+STLM.fit <- train.ts %>%
+  stlm(method = "arima")                  # 시계열을 분해하고 추세 + 오차 성분에 ARIMA 모형 적합
+STLM.fit
+```
+
+- stl : STL분해를 사용한 결과
+- model : 추세 + 오차 성분에 모형 적합 결과
+- x : 원 시계열 데이터
+- m : 계절 주기
+- fitted : 추세 + 오차 성분에 모형 적합 결과(model) + 원 계절성분 (Original Seasonal Component)
+- residuals : x-fitted
+
+------
+
+## **예측**
+
+- `추세 + 오차 성분에 ETS, ARIMA 등과 같은 모형을 적합`시킨 후 `forecast` 함수를 이용해 예측하고 `계절 성분은 Seasonal naive method을 이용해 예측`한다. 
+
+
+```{r}
+STLM.forecast <- forecast(STLM.fit, h = n.test)    # 추세 + 오차 성분을 예측하고 Seasonal naive method(같은 시즌의 마지막 관측값=예측)를 이용하여 Seasonal 예측하여 더함
+STLM.forecast$mean
+
+plot(STLM.forecast)
+accuracy(test.ts, STLM.forecast$mean)
+```
+
+------
+
+## **모형 적합 with 예측 변수**
+
+- 예측 변수에 퓨리에 항이 존재하는 경우, 추세 + 오차 성분에 DHR 모형을 적합시키는 것과 같다.
+
+```{r}
+# Month 변수 생성
+xts(ridership.ts, order = as.Date(ridership.ts))
+Month  <- as.Date(ridership.ts) %>%                  # Date 추출
+  lubridate::month()                                 # Month 추출
+
+# 퓨리에 항과 합치기
+Train.Xreg <- cbind("Month"= Month[1:length(train.ts)], 
+                    fourier(train.ts, K=2))           # K : sine, cosine 쌍의 개수/시계열 데이터의 계절 주기가 2개 이상일 때, K는 계절 주기 수만큼 필요
+
+Test.Xreg  <- cbind("Month"= Month[-(1:length(train.ts))], 
+                    fourier(train.ts, K=2, h=n.test)) 
+
+STLM.fit2 <- train.ts %>%
+  stlm(method = "arima", xreg = Train.Xreg)            # 시계열을 분해하고 추세 + 오차 성분에 DHR 모형 적합 => 예측 변수에 Fourier Terms 포함되서
+STLM.fit2
+```
+
+------
+
+### **예측 with 예측 변수**
+
+```{r}
+STLM.forecast2 <- forecast(STLM.fit2, h = n.test,      
+                          newxreg = Test.Xreg)    
+STLM.forecast2$mean
+
+plot(STLM.forecast2)
+
+accuracy(STLM.forecast2$mean, test.ts)
+```
+
