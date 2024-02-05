@@ -1,0 +1,338 @@
+---
+title: "Spatio-Temporal Modeling"
+description: |
+  Summary of Poisson Regression in Spatio-Temporal Model
+author:
+  - name: Yeongeun Jeon
+date: 02-08-2021
+categories: Spatial Statistics
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# **Poisson Regression**
+
+- Target($y$)이 셀 수 있는 이산형(Discrete)일 때 사용하는 모형
+- 관심있는 모수(Parameter) : $y$의 평균 $\lambda_{i}=E(y_{i})$
+\begin{align*}
+y_{i} &\thicksim Poisson(\lambda_{i}), \;\; \lambda_{i} = E(y_{i})\\
+\eta_{i} &= \log{\lambda_{i}} = \beta_{0}+ \sum_{j} \beta_{j}x_{ji}\\
+\beta_{j}  &\thicksim Normal
+\end{align*}
+
+- $\exp(\beta_{0})$ 
+  - 수치형 : 예측변수들이 0일 때 평균 사건 수 
+  - 범주형 :  Reference Category일 때 평균 사건 수
+- $\exp(\beta_{j})$ 
+  - 예측변수들이 1단위 변화할 때 $y$의 평균 변화 
+  
+-----
+
+## **Relative Risk**
+
+실제로 $y$의 평균 보다 `"Rate"` or `"Relative Risk"`에 더 관심있으며, Poisson Regression의 목적은 `Relative Risk을 추정하는 것`이다.
+왜냐하면 단순히 "수"로는 어느 게 크고 작은지 또는 높고 낮은지 정확하게 판단할 수 있는 기준이 없기 때문이다. 
+
+
+\begin{align*}
+y_{i} &\thicksim Poisson(\lambda_{i}), \;\; \lambda_{i} = E_{i}\rho_{i}\\
+\eta_{i} &= \log{\rho_{i}}= \log{\frac{\lambda_{i}}{E_{i}}} = \beta_{0}+ \sum_{j} \beta_{j}x_{ji}\\
+\beta_{j}  &\thicksim Normal
+\end{align*}
+
+
+- $E_{i}$ : Offset
+- $\rho_{i}$ : `"Rate"` or `"Relative Risk"`
+- $\exp(\beta_{0})$ 
+  - 수치형 : 예측변수들이 0일 때 평균 사건 수 
+  - 범주형 :  Reference Category일 때 평균 사건 수
+- $\exp(\beta_{j})$ : 
+  - 수치형 : $x_{ji}$이 1 증가할 때 `"Rate"` or `"Relative Risk"`의 변화
+  - 범주형 :  Reference Category와 비교할 때 `"Rate"` or `"Relative Risk"`의 변화
+  
+### **Estimation of Relative Risk**
+
+실제로 상대적 위험(Relative Risk)의 추정값으로 가장 많이 쓰이는 것은 SMR(Standardized Mortality Ratio)이다.
+
+\begin{align*}
+\hat{\rho}_{i} = \frac{y_{i}}{E_{i}}
+\end{align*}
+  
+- $y_{i}$ : $i$에서의 결과값
+- $E_{i}$ : $i$에서의 예측된 값
+
+- $\hat{\rho}_{i}>1$ : 예상된 것보다 위험이 높다.
+- $\hat{\rho}_{i}=1$ : 예상된 것과 같다.
+- $\hat{\rho}_{i}<1$ : 예상된 것보다 위험이 낮다.
+
+-------
+
+## **Spatial Model**
+
+- `공간적 패턴을 파악`하거나 `상대적 위험(Relative Risk)이 높고 낮은 지역 식별`
+
+### **Expected Case**
+
+흔하게 사용하는 예상되는 수 ($E_{i}$)는 
+\begin{align*}
+E_{i} = n_{i}\frac{\sum y_{i}}{\sum n_{i}},
+\end{align*}
+
+- $n_{i}$는 $i$ 번째 지역의 인구수
+
+(참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.85)
+
+------
+
+### **Estimation of Relative Risk**
+
+\begin{align*}
+\hat{\rho_{i}} &= \frac{y_{i}}{E_{i}} = \frac{y_{i}/n_{i}}{\sum y_{i}/ \sum n_{i}}.
+\end{align*}
+
+- $\hat{\rho_{i}}>1$ : $i$번째 지역의 사람들은 $y$에 대해 전체 지역과 비교해서 높은 위험(Risk)를 가진다.
+- $\hat{\rho_{i}}=1$ : $i$번째 지역의 사람들은 $y$에 대해 전체 지역과 비교해서 비슷한 위험(Risk)를 가진다.
+- $\hat{\rho_{i}}<1$ : $i$번째 지역의 사람들은 $y$에 대해 전체 지역과 비교해서 낮은 위험(Risk)를 가진다.
+
+---------
+
+### **BYM Model**
+
+$i$번째 지역에서의 결과값을 $y_{i}$라고 할 때,
+
+\begin{align*}
+y_{i} &\thicksim Poisson(\lambda_{i}), \;\; \lambda_{i} = E_{i}\rho_{i}\\
+\eta_{i} &= \log{\rho_{i}} = b_{0} + u_{i} + v_{i} 
+\end{align*}
+
+- $E_{i}$ : $i$번째 지역에서 예상된 수
+- $\rho_{i}$ : $i$번째 지역의 상대적 위험 (Relative risk)
+- $b_{0}$ : 모든 지역에서의 평균 $y$
+- $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
+- $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
+
+
+#### **Spatial Effect**
+
+- BYM Model은 공간적으로 구조화된 요소($u_{i}$)와 비구조화된 요소($v_{i}$) 두 가지를 모두 고려
+- 공간 효과는 `공간 의존성(Spatial Dependency)`을 포함
+  - 공간 의존성 : 가까운 이웃들끼리 서로 영향을 받는다는 것
+    - 가까운 이웃들끼리 비슷한 상대적 위험을 가지고 있으면 공간 의존성이 있다는 것
+
+
+##### **구조화된 공간 효과($u_{i}$)**
+\begin{align*}
+&u_{i} \vert u_{-i} \thicksim N(m_{i}, s^2_{i}),\\
+&m_{i} = \frac{\sum_{j \in \mathcal{N}_{i}} u_{j}}{{\# \mathcal{N}_{i}}} ,\;\;  
+s^2_{i} = \frac{\sigma^2_{u}}{\# \mathcal{N}_{i}},
+\end{align*}
+
+- $\mathcal{N}_{i}$ : $i$ 번째 지역과 근접한 이웃 지역 집합
+- $\# \mathcal{N}_{i}$ : $i$ 번째 지역과 근접한 이웃 지역 갯수
+   - 근접한 이웃은 경계선이 맞닿아 있는 지역을 의미
+   
+- $m_{i}$ : $i$ 번째 지역과 근접한 이웃 지역들의 $u_{j}$ 평균
+
+- $s^2_{i}$ : 근접한 이웃 수에 의존
+  - 이웃 수가 많으면 분산은 작아짐
+    - **강한 공간 상관관계**가 존재하는 경우, 이웃을 많이 가지는 지역일수록 더 많은 정보를 가진다는 것 
+- 공간 상관관계는 **iCAR**을 사용
+
+
+##### **비구조화된 공간 효과($v_{i}$)**
+\begin{align*}
+v_{i} \thicksim N(0, \sigma^2_{v})
+\end{align*}
+
+- 순수한 과산포 (Overdispersion)에 대한 고려
+
+-------
+
+- BYM Model에서의 모수 (Parameter)는 $log{\tau_{u}}$, $log{\tau_{v}}$ , where $\tau_{u} = 1/{\sigma^2_{u}}$, $\tau_{v} = 1/{\sigma^2_{v}}$
+
+- $u_{i}$와 $v_{i}$는 독립적으로 해석할 수 없으며, 오직 $\xi_{i}=u_{i}+v_{i}$로 공간 효과를 식별할 수 있다.
+
+
+-------
+
+## **Spatial-Temporal Model**
+
+- 공간적 패턴 뿐 아니라 시간적 패턴을 파악
+- 시공간 상호작용은 공간의 시간패턴을 분석하며, 공간과 시간의 주요 요인으로 설명되지 않는 추가 효과를 포착
+- 예측변수가 포함되면 Ecological Regression이라 부름
+
+
+### **Expected Case**
+
+흔하게 사용하는 예상되는 수 ($E_{it}$)는 
+\begin{align*}
+E_{it} = n_{it}\frac{\sum_{t}\sum_{i} y_{it}}{\sum_{t}\sum_{i} n_{it}},
+\end{align*}
+
+- $n_{it}$는 $t$시점에서 $i$ 번째 지역의 인구수
+
+(참고 : [Bayesian Disease Mapping: Hierarchical Modeling in Spatial Epidemiology](https://www.routledge.com/Bayesian-Disease-Mapping-Hierarchical-Modeling-in-Spatial-Epidemiology/Lawson/p/book/9781138575424) p.293)
+
+------
+
+### **Estimation of Relative Risk**
+
+\begin{align*}
+\hat{\rho_{it}} &= \frac{y_{it}}{E_{it}} = \frac{y_{it}/n_{it}}{\sum_{t}\sum_{i} y_{it}/\sum_{t}\sum_{i} n_{it}}.
+\end{align*}
+
+- $\hat{\rho_{it}}>1$ : $t$시점에서 $i$번째 지역의 위험은 연구기간에 걸쳐서 전체 지역의 전반적인 위험보다 높다.
+- $\hat{\rho_{it}}=1$ : $t$시점에서 $i$번째 지역의 위험은 연구기간에 걸쳐서 전체 지역의 전반적인 위험과 비슷하다.
+- $\hat{\rho_{it}}<1$ : $t$시점에서 $i$번째 지역의 위험은 연구기간에 걸쳐서 전체 지역의 전반적인 위험보다 낮다.
+
+---------
+
+#### **Classical Parametric Trend**
+
+$t$시간에서 $i$번째 지역의 결과값을 $y_{it}$라고 할 때,
+\begin{align*}
+y_{it} &\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}\\
+\eta_{it} &= \log{\rho_{it}} = b_{0} + u_{i} + v_{i} + (\beta+\delta_{i})*t\\
+\delta_{i} &\thicksim N(0, \sigma^2_{\delta})
+\end{align*}
+
+- $E_{it}$ : $t$시간에 $i$번째 자치구의 예상된 수
+- $\rho_{it}$ :$t$시간에 $i$번째 자치구의 상대적 위험 (Relative risk)
+- $b_{0}$ : 모든 자치구에서의 평균 $y$
+- $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
+- $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
+- $\beta$ : 전반적인 시간 효과
+- $\delta_{i}$ : 시간과 공간 사이의 상호작용으로 전반적인 추세 $\beta$와 지역별 추세(area-specific trend) 사이의 차이
+   - $\delta_{i}>0$ : $i$번재 자치구의 trend는 주요 추세(Main Trend)보다 가파르다.
+   - $\delta_{i}<0$ : $i$번재 자치구의 trend는 주요 추세(Main Trend)보다 덜 가파르다.
+
+&#10148; **Classical Parametric Trend는 선형추세만을 가정한다**
+
+- 모수(Parameter) : $\log{\tau_{u}}$, $\log{\tau_{v}}$ 그리고 $\log{\tau_{\delta}}$, where $\tau_{u} = 1/{\sigma^2_{u}}$, $\tau_{v} = 1/{\sigma^2_{v}}$, $\tau_{\delta} = 1/{\sigma^2_{\delta}}$
+
+
+-------
+
+#### **Nonparametric Dynamic Trend**
+
+$t$시간에서 $i$번째 지역의 결과값을 $y_{it}$라고 할 때,
+\begin{align*}
+y_{it} &\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}\\
+\eta_{it} &= \log{\rho_{it}} = b_{0} + u_{i} + v_{i} + \gamma_{t} + \phi_{t}
+\end{align*}
+
+- $E_{it}$ : $t$시간에 $i$번째 자치구의 예상된 수
+- $\rho_{it}$ :$t$시간에 $i$번째 자치구의 상대적 위험 (Relative risk)
+- $b_{0}$ : 모든 자치구에서의 평균 $y$
+- $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
+- $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
+- $\gamma_{t}$ : 구조화된 시간 효과 (Structured time effect)이며, dynamically 모형화
+- $\phi_{t}$ : 비구조화된 시간 효과 (Unstructured time effect)
+
+&#10148; **Nonparametric Dynamic Trend는 선형성 조건을 완하하기 위하여 Dynamic nonparametric 형태를 취한다.**
+
+##### **Time Effect**
+
+Nonparametric Dynamic Trend는 시간적으로 구조화된 요소($\gamma_{t}$)와 비구조화된 요소($\phi_{t}$) 두 가지를 모두 고려한다. 
+
+###### **구조화된 시간 효과($\gamma_{i}$)**
+
+Nonparametric Dynamic Trend에서 구조화된 시간 효과($\gamma_{t}$)는 `Random Walk(RW)`를 사용하여 모형화한다.
+
+
+\begin{align*}
+\gamma_{t} \vert \gamma_{t-1} \thicksim N(\gamma_{t-1}, \sigma^2_{\gamma}), \text{RW of order 1},\\
+\gamma_{t} \vert \gamma_{t-1}, \gamma_{t-2} \thicksim N(2\gamma_{t-1} + \gamma_{t-2}, \sigma^2_{\gamma}), \text{RW of order 2} \\
+\end{align*}
+
+- 시간에 따라 변화하는 모수를 가지기 때문에 Dynamically 모형화된다.
+
+
+###### **비구조화된 시간 효과($\phi_{t}$)**
+\begin{align*}
+\phi_{t} \thicksim N(0, \sigma^2_{\pi})
+\end{align*}
+
+- 교환가능한(Exchangeable) prior Gaussian을 따른다.
+
+------
+
+- 모수 (Parameter) : $\log{\tau_{u}}$, $\log{\tau_{v}}$, $\log{\tau_{\gamma}}$ 그리고 $\log{\tau_{\phi}}$, where $\tau_{u} = 1/{\sigma^2_{u}}$, $\tau_{v} = 1/{\sigma^2_{v}}$, $\tau_{\gamma} = 1/{\sigma^2_{\gamma}}$, $\tau_{\phi} = 1/{\sigma^2_{\phi}}$
+
+
+-------
+
+#### **Spatial-Time Interaction**
+
+공간 및 시간 모형은 전반적인 공간과 시간 패턴을 파악하기 때문에, 모든 시간 또는 모든 공간에 대해 변하지 않는다. 그렇기 때문에 `시공간 상호작용은 공간과 시간의 주요 요인으로 설명되지 않는 추과 효과를 포착`할 수 있다. 또한 `시간에 따른 공간 패턴`도 파악 할 수 있으며, `각 지역의 추세`도 파악할 수 있다. 시공간 상호작용은 다음과 같은 `네가지의 Type`을 가진다.
+
+
+| Interaction | Parameter interacting 
+| :--:        | :---:
+|   Type I    | $v_{i}$ and $\phi_t$  
+|  Type II    | $v_{i}$ and $\gamma_t$
+|  Type III   | $u_{i}$ and $\phi_t$  
+|  Type IV    | $u_{i}$ and $\gamma_t$
+
+
+$t$시간에서 $i$번째 지역의 결과값을 $y_{it}$라고 할 때,
+\begin{align*}
+y_{it} &\thicksim Poisson(\lambda_{it}), \;\; \lambda_{it} = E_{it}\rho_{it}\\
+\eta_{it} &= \log{\rho_{it}} = b_{0} + u_{i} + v_{i} + \gamma_{t} + \phi_{t} + \delta_{it}
+\end{align*}
+
+- $E_{it}$ : $t$시간에 $i$번째 자치구의 예상된 수
+- $\rho_{it}$ :$t$시간에 $i$번째 자치구의 상대적 위험 (Relative risk)
+- $b_{0}$ : 모든 자치구에서의 평균 $y$
+- $u_{i}$ : 구조화된 공간 효과 (Structured spatial effect)
+- $v_{i}$ : 비구조화된 공간 효과 (Unstructured spatial effect)
+- $\gamma_{t}$ : 구조화된 시간 효과 (Structured time effect)이며, dynamically 모형화
+- $\phi_{t}$ : 비구조화된 시간 효과 (Unstructured time effect)
+- $\delta_{it}$ : 시공간 상호작용 (Interaction effect) 
+
+---------
+
+### **Spatial Effect**
+
+- 주요 공간 효과로, 전반적인 공간 패턴을 확인
+  - 공간 의존성을 가지는지 확인
+    - 가까운 이웃들은 비슷한 상대적 위험을 가지는가
+- $t$에 영향 받지 않기 때문에 시간에 대해서 일정
+    - 시간에 대해 전반적인 공간 패턴
+      - 시간에 대해 평균인 공간 패턴
+- 해석 
+    - $\exp(u_{i}+v_{i})>1$ : 모든 연구 기간에 걸쳐서 $i$번째 지역의 평균 위험은 전체 지역의 평균 위험보다 높다.
+    - $\exp(u_{i}+v_{i})=1$ : 모든 연구 기간에 걸쳐서 $i$번째 지역의 평균 위험은 전체 지역의 평균 위험과 비슷하다.
+     - $\exp(u_{i}+v_{i})<1$ : 모든 연구 기간에 걸쳐서 $i$번째 지역의 평균 위험은 전체 지역의 평균 위험보다 낮다. 
+     
+---------
+
+### **Time Effect**
+
+- 주요 시간 효과로, 전반적인 시간 패턴을 확인
+- $i$에 영향 받지 않기 때문에 지역에 대해서 일정
+    - 모든 지역에 대해 전반적인 시간 패턴
+      - 모든 지역에 대해 평균인 시간 패턴
+- 해석 
+    - $\exp(\gamma_{t}+\phi_{t})>1$ : 모든 지역에 걸쳐서 $t$시점에서의 평균 위험은 전체 지역의 전반적인 위험(모든 연구 기간에 걸쳐서 평균낸)보다 높다.
+    - $\exp(\gamma_{t}+\phi_{t})=1$ : 모든 지역에 걸쳐서 $t$시점에서의 평균 위험은 전체 지역의 전반적인 위험(모든 연구 기간에 걸쳐서 평균낸)과 비슷하다.
+     - $\exp(\gamma_{t}+\phi_{t})<1$ : 모든 지역에 걸쳐서 $t$시점에서의 평균 위험은 전체 지역의 전반적인 위험(모든 연구 기간에 걸쳐서 평균낸)보다 낮다.
+     
+---------
+
+### **Spatial-Time Interaction**
+
+- 공간과 시간의 주요 효과로 설명되지 못한 부분을 포착
+    - 모든 연구기간에 걸쳐서 특정 지역의 공간 위험이 높다고 해서 각 시점에서 그 지역이 항상 위험이 높은 것은 아니다.
+- 네가지의 타입
+- 시간에 따른 공간 패턴을 파악
+  - $\exp(\gamma_{t}+\phi_{t})$가 높을 때 위험 지역이 많은가?
+- 각 지역의 시간 추세를 파악
+- $\exp(\delta_{it})>1$ : 공간 위험 $\exp(u_{i}+v_{i})$를 증가시키는 데 기여

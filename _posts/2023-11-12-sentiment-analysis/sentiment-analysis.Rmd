@@ -1,0 +1,909 @@
+---
+title: "Sentiment Analysis"
+description: |
+  Description for Sentiment Analysis
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-11-12
+categories: Text Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+- **참고 : Do it! 쉽게 배우는 R 텍스트 마이닝***
+
+----------
+
+> # **감정 분석 (Sentiment Analysis)**
+
+- 감정 분석 : 텍스트에 어떤 감정이 담겨있는지 분석하는 방법
+    - 감정 분석을 수행하면 글쓴이가 어떤 감정을 담아 글을 썼는지, 사람들이 어떤 주제를 긍정적으로 느끼는지 아니면 부정적으로 느끼는지 파악할 수 있다.
+
+-----------
+
+# **패키지 설치**
+
+```{r}
+pacman::p_load("readr",
+               "dplyr", "tidyr",
+               "stringr",
+               "tidytext",
+               "textclean",
+               "KoNLP",
+               "ggplot2")
+```
+
+-----------
+
+# **1. 감정 사전 활용**
+
+- 감정 분석을 수행할 때는 "감정 사전"을 활용한다.
+- 감정 사전은 감정을 나타내는 단어와 감정의 강도를 표현한 숫자로 구성된다.
+- 감정 사전을 이용해서 문장의 단어에 감정 점수를 부여한 다음 합산하면 문장이 어떤 감정을 표현하는지 파악할 수 있다.
+
+<center>
+![](./image/감정사전.png){width=100%}
+</center>
+</br>
+
+----------
+
+## **1-1. 감정 사전 불러오기**
+
+```{r, eval=F}
+# 감정 사전 불러오기
+dic <- read.csv(".../knu_sentiment_lexicon.csv")
+
+dic
+```
+
+```{r, echo=F}
+# 감정 사전 불러오기
+dic <- read_csv("C:/Users/User/Desktop/쉽게 배우는 R 텍스트 마이닝/Data/knu_sentiment_lexicon.csv")
+
+dic
+```
+
+`Result!` 군산대학교 소프트웨어융합공학과에서 만든 'KNU 한국어 감정 사전'을 불러온다. 감정 사전은 감정 단어 `word`와 감정의 강도를 숫자로 표현한 `polarity`로 구성되어 있다.  
+KNU 한국어 감정 사전 깃허브 출처는 [여기](https://github.com/park1200656/KnuSentiLex)이다.
+
+------------
+
+```{r}
+# 긍정 단어 
+dic %>% 
+  filter(polarity %in% c(1, 2) ) %>% 
+  arrange(word)
+
+# 부정 단어
+dic %>% 
+  filter(polarity %in% c(-1, -2) ) %>% 
+  arrange(word)
+
+# 중성 단어
+dic %>% 
+  filter(polarity == 0 ) %>% 
+  arrange(word)
+```
+
+`Result!` 감정 단어를 나타내는 `word`는 한 단어로 구성된 단일어, 두 개 이상의 단어가 결합된 복합어, "^^", "ㅠㅠ" 같은 이모티콘으로 구성되어 있다. `polarity`는 `-2`에서 `+2`까지 5가지 정수로 되어 있다. 예를 들어, "좋은", "기쁜"과 같은 긍정 단어는 `polarity`가 `+`, "나쁜", "슬픈"과 같은 부정 단어는 `-`로 표현된다. 긍정과 부정 중 어느 한쪽으로 판단하기 어려운 중성 단어는 `0`으로 표현된다.
+
+```{r}
+# 단어 "좋은"과 "나쁜"
+dic %>% 
+  filter(word %in% c("좋은", "나쁜"))
+
+# 단어 "기쁜"과 "슬픈"
+dic %>% 
+  filter(word %in% c("기쁜", "슬픈"))
+
+# 단어 "행복하다"와 "좌절하다"
+dic %>%
+  filter(word %in% c("행복하다", "좌절하다"))
+
+# 이모티콘
+dic %>% 
+  filter(!str_detect(word, "[가-힣]")) %>%          # 한글이 아닌 단어만 추출
+  arrange(word)
+```
+
+------------
+
+```{r}
+# 감정 사전 단어 개수
+dic %>% 
+  # 변수 sentiment에 긍정 단어, 부정 단어, 그리고 중성 단어를 각각 "pos", "neg", "neu"로 입력
+  mutate(sentiment = ifelse(polarity >=  1, "pos", ifelse(polarity <= -1, "neg", "neu"))) %>%  
+  count(sentiment)             # 변수 sentiment의 항목별 개수 확인
+```
+
+`Result!` 감정 사전의 단어는 긍정 단어 4,871개, 부정 단어 9,829개, 그리고 중성 단어 154개로 총 14,854개이다.
+
+----------
+
+## **1-2. 감정 점수 계산**
+
+- 감정 사전을 이용해 문장의 감정 점수를 계산하기 위해서는 먼저 분석할 텍스트의 단어를 감정 사전의 단어와 대조할 수 있도록 토큰화해야 한다.
+    - 감정 사전은 형태소가 아니라 단어로 구성되어 있으므로 분석할 텍스트도 `단어`로 토큰화해야 한다.
+- 토큰화를 수행한 다음, 단어에 감정 점수를 부여하고 문장별로 감정 점수를 합산한다.
+
+```{r}
+# 예시 문장
+df <- tibble(sentence = c("디자인 예쁘고 마감도 좋아서 만족스럽다.",
+                          "디자인은 괜찮다. 그런데 마감이 나쁘고 가격도 비싸다."))
+df
+
+# 1. 단어 기준으로 토큰화
+word.token <- df %>% 
+  unnest_tokens(input = sentence,      # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,         # 출력 변수명
+                token = "words",       # 단어 기준으로 토큰화
+                drop = F)              # 원문 제거 X
+
+word.token %>% 
+  print(n = Inf)                       # 모든 행 출력
+```
+    
+```{r}
+# 2. 토큰화한 단어에 감정 점수 부여
+word.score <- word.token %>% 
+  left_join(dic, by = "word") %>%                          # 토큰화 결과와 감정 사전을 변수 word를 기준으로 결합 
+  mutate(polarity = ifelse(is.na(polarity), 0, polarity))  # 결측값 NA를 0으로 대체 -> 단어가 감정 사전에 없으면 결측값이 부여되기 때문
+
+word.score %>% 
+  print(n = Inf)                                           # 모든 행 출력
+```
+
+`Result!` 첫 번째 문장의 "예쁘고", "좋아서", "만족스럽다"에 긍정 점수가 부여되었으며, 두 번째 문장은 "괜찮다"에 긍점 점수가 부여되었다. 반면, 두 번째 문장의 "나쁘고", "비싸다"에는 부정 점수가 부여된 것을 알 수 있다.
+
+```{r}
+# 3. 문장별로 감정 점수 합산
+score_df <- word.score %>% 
+  group_by(sentence) %>%              # 변수 sentence에 대해 그룹화 수행 -> 문장별로 점수를 합산하기 위해 
+  summarise(score  = sum(polarity))   # 점수합 계산
+
+score_df
+```
+
+`Result!` 문장별로 감정 점수를 합산하면, 첫 번째 문장은 세 단어("예쁘고", "좋아서", "만족스럽다")가 `+2`이므로 합산해 6이 되었다. 두 번째 문장은 한 단어("괜찮다")가 `+1`, 두 단어("나쁘고", "비싸다")는 `-2`이므로 합산해 -3이 되었다.
+
+------------
+
+# **2. 댓글 감정 분석**
+
+- 실제 텍스트를 이용하여 감정 분석을 수행한다.
+- 분석 자료 "news_comment_parasite.csv" : 2020년 2월 10일 영화 "기생충"의 아카데미상 수상 소식을 다룬 기사에 달린 댓글이 들어있는 데이터
+
+------------
+
+## **2-1. 데이터 불러오기**
+
+```{r, eval=F}
+# 데이터 불러오기
+raw_news_comment <- read_csv(".../news_comment_parasite.csv")
+
+raw_news_comment
+```
+
+```{r, echo=F}
+# 데이터 불러오기
+raw_news_comment <- read_csv("C:/Users/User/Desktop/쉽게 배우는 R 텍스트 마이닝/Data/news_comment_parasite.csv")
+
+raw_news_comment
+```
+
+--------------
+
+## **2-2. 전처리**
+
+- 전처리를 위해 다음과 같은 2가지 과정을 수행한다.  
+    1. 변수 `id` 추가 : 댓글의 내용이 같아도 구별할 수 있도록 고유 번호를 부여한다.  
+    2. html 특수 문자 제거 : 웹에서 만들어진 텍스트는 `&nbsp;`와 같은 html 특수 문자를 포함하고 있어서 내용을 알아보기 힘들다. 이를 해결하기 위해 Package `"textclean"`의 함수 `replace_html`를 이용해 html 태그를 공백으로 바꾸고, Package `"stringr"`의 함수 `str_squish`를 이용해 중복 공백을 제거한다.
+
+`Caution!` 감정 사전은 특수 문자, 모음, 자음으로 된 두 글자 미만의 이모티콘도 포함하고 있기 때문에 특수 문자나 두 글자 미만의 단어는 제거하지 않는다. 
+
+```{r}
+news_comment <- raw_news_comment %>%
+  mutate(id = row_number(),                       # 행 번호(row_number)을 고유 번호로 부여
+         reply = str_squish(replace_html(reply))) # html 특수 문자 제거
+
+news_comment
+
+glimpse(news_comment)                             # 데이터 구조 확인
+```
+
+
+```{r}
+# 단어 기준으로 토큰화
+word_comment <- news_comment %>%                  
+  unnest_tokens(input = reply,         # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,         # 출력 변수명
+                token = "words",       # 단어 기준으로 토큰화
+                drop = F)              # 원문 제거 X
+
+word_comment %>%
+  select(word, reply)                  # 변수 word와 reply만 선택
+```
+
+-------------
+
+## **2-3. 감정 점수 부여**
+
+```{r}
+word_score <- word_comment %>%                             # 전처리 & 토큰화를 수행한 결과가 저장되어 있는 객체 in 2-2
+  left_join(dic, by = "word") %>%                          # 감정 사전과 변수 word를 기준으로 결합 
+  mutate(polarity = ifelse(is.na(polarity), 0, polarity))  # 결측값 NA를 0으로 대체 -> 단어가 감정 사전에 없으면 결측값이 부여되기 때문
+
+word_score %>%
+  select(word, polarity)                                   # 변수 word와 polarity만 선택
+
+```
+
+-------------
+
+## **2-4. 자주 사용한 단어 확인**
+
+```{r}
+word_comment1 <- word_score %>%                            # 감정 점수가 부여된 객체 in 2-3
+  # 감정 분류 : 변수 sentiment에 polarity가 2이면 "pos", -2이면 "neg", 그 외는 "neu"로 입력 
+  mutate(sentiment = ifelse(polarity ==  2, "pos",
+                            ifelse(polarity == -2, "neg", "neu")))
+
+word_comment1 %>%
+  count(sentiment)          # 변수 sentiment의 항목별 개수 확인  
+```
+
+`Result!` 부정 단어 285개, 중성 단어 36,671개, 긍정 단어 762개가 포함되어 있다.
+
+```{r}
+# 자주 사용한 단어 추출
+top10_sentiment <- word_comment1 %>%
+  filter(sentiment != "neu") %>%         # 감정 범주가 "중립"인 단어 제외
+  count(sentiment, word) %>%             # 변수 sentiment의 항목별 단어 빈도 계산 
+  group_by(sentiment) %>%                # 변수 sentiment에 대해 그룹화 수행 -> 각 항목별로 자주 사용한 단어를 추출하기 위해
+  slice_max(n, n = 10)                   # 자주 사용한 단어 10개 추출
+
+top10_sentiment
+
+# 시각화
+ggplot(top10_sentiment,                                           # 자주 사용한 단어가 저장되어 있는 객체
+       aes(x = reorder(word, n),                                  # reorder : 항목별 내림차순 정렬
+           y = n, 
+           fill = sentiment)) +                                   # 긍정 단어와 부정 단어에 대해 막대 색깔 다르게 표현
+  geom_col() +                                                    # 막대 그래프
+  coord_flip() +                                                  # 막대를 가로로 회전
+  geom_text(aes(label = n), hjust = -0.3) +                       # 막대 끝에 빈도 표시
+  facet_wrap(~ sentiment,                                         # 변수 sentiment의 항목별로 그래프 작성 -> 긍정 단어와 부정 단어 각각의 막대 그래프 작성
+             scales = "free") +                                   # x축과 y축 통일 X
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +  # 막대와 그래프 경계의 간격 조정  
+  labs(x = NULL)                                                  # x축 제목 제거 -> 막대를 가로로 회전했기 때문에 y축 제목이 제거됨
+```
+
+`Result!` 그래프를 보면 긍정 단어는 "대단하다", "자랑스럽다", "축하" 등의 빈도가 높으며 이러한 단어들은 아카데미상 수상을 축하하는 댓글들에 사용된 단어라고 예상할 수 있다. 반면, 부정 단어는 "소름", "아니다", "우울한" 등의 빈도가 높으며 이러한 단어들은 영화를 보며 생긴 부정적인 감정을 표현한 댓글들에 사용된 단어라고 예상할 수 있다.  
+`Caution!` "소름", "미친" 등은 부정적인 단어가 아니라 긍정적인 감정을 극적으로 표현하는 단어일 수도 있기 때문에 감정 사전을 수정해서 점수를 부여해야 한다. 이러한 작업은 [**4. 감정 사전 수정**][**4. 감정 사전 수정**]에서 다룬다.
+
+----------
+
+## **2-5. 댓글별 감정 점수 계산**
+
+```{r}
+score_comment <- word_score %>%                     # 감정 점수가 부여된 객체 in 2-3
+  group_by(id, reply) %>%                           # 변수 id와 reply에 대해 그룹화 수행 -> 각 댓글별로 점수합을 계산하기 위해
+  summarise(score = sum(polarity)) %>%              # 점수합 계산
+  ungroup()                                         # 그룹 해제
+
+score_comment %>% 
+  select(score, reply)                              # 변수 score와 reply만 선택
+```
+
+```{r}
+# 긍정 댓글
+score_comment %>% 
+  select(score, reply) %>%                          # 변수 score와 reply만 선택
+  arrange(-score)                                   # 점수를 내림차순 정렬
+
+# 부정 댓글
+score_comment %>%
+  select(score, reply) %>%                          # 변수 score와 reply만 선택
+  arrange(score)                                    # 점수를 오름차순 정렬
+```
+
+`Result!` 감정 점수가 높은 긍정 댓글을 보면 제작진의 수상을 축하하고 대한민국의 위상이 올라간 것을 기뻐하는 긍정적인 내용이 많은 반면, 감정 점수가 낮은 부정 댓글을 보면 감독의 정치 성향이나 영화 내용으로 연상되는 사회 문제를 비판하는 부정적인 내용이 많다는 것을 알 수 있다.
+
+----------
+
+## **2-6. 감정 경향 확인**
+
+```{r}
+# 1. 감정 점수 빈도 계산
+score_comment %>%                                   # 댓글별로 감정 점수를 계산한 객체 in 2-5
+  count(score) %>%                                  # 점수에 대한 빈도 계산
+  print(n = Inf)                                    # 모든 행 출력
+```
+
+`Result!` 댓글의 감정 점수 빈도를 보면, 감정 사전에 없는 단어만 사용해 0점이 부여된 댓글이 2,897개로 가장 많고, 점수가 높거나 낮은 양 극단으로 갈수록 빈도가 감소하는 경향이 있다.
+
+```{r}
+# 2. 감정 분류
+score_comment <- score_comment %>%                 # 댓글별로 감정 점수를 계산한 객체 in 2-5
+  # 변수 sentiment에 감정 점수가 1 이상이면 "pos", -1이하면 "neg", 그 외는 "neu"로 입력
+  mutate(sentiment = ifelse(score >=  1, "pos",
+                     ifelse(score <= -1, "neg", "neu")))
+
+score_comment
+
+# 3. 댓글의 전반적인 감정 경향
+frequency_score <- score_comment %>%               # 감정 범주가 할당된 객체 
+  count(sentiment) %>%                             # 변수 sentiment에 대해 그룹화 수행 -> 각 항목별로 비율을 계산하기 위해
+  mutate(ratio = n/sum(n)*100)                     # 비율 계산
+
+frequency_score
+```
+
+`Result!` 중립 댓글이 70%로 가장 많고, 긍정 댓글은 19.5%, 부정 댓글은 10.5%로 구성되어 있다.
+
+```{r}
+# 시각화 Ver.1 : 막대 그래프
+ggplot(frequency_score, aes(x = sentiment, y = n, 
+                            fill = sentiment)) +    # 감정 범주에 대해 막대 색깔 다르게 표현
+  geom_col() +                                      # 막대 그래프
+  geom_text(aes(label = n), vjust = -0.3) +         # 막대 끝에 빈도 표시
+  scale_x_discrete(limits = c("pos", "neu", "neg")) # x축 순서 
+```
+
+`Result!` 그래프를 보면 중립, 긍정, 부정 순으로 댓글이 많음을 한눈에 알 수 있다.
+
+```{r}
+# 시각화 Ver.2 : 누적 막대 그래프
+frequency_score$dummy <- 0                                 # 더미 변수 생성
+frequency_score
+
+ggplot(frequency_score, aes(x = dummy, y = ratio, 
+                            fill = sentiment)) +           # 감정 범주에 대해 막대 색깔 다르게 표현
+  geom_col() +                                             # 막대 그래프
+  geom_text(aes(label = paste0(round(ratio, 1), "%")),     # 비율을 소수점 둘째 자리에서 반올림한 후 "%" 붙이기   
+            position = position_stack(vjust = 0.5)) +      # 비율이 표시되는 위치 : 막대 가운데
+  theme(axis.title.x = element_blank(),                    # x축 이름 제거
+        axis.text.x  = element_blank(),                    # x축 값 제거
+        axis.ticks.x = element_blank())                    # x축 눈금 제거
+```
+
+`Result!` 누적 막대 그래프는 하나의 막대 위에 여러 범주의 비율을 표현하며, 이를 통해 구성 요소의 비중 차이를 한눈에 파악할 수 있다. 출력 그래프를 보면 막대가 감정 범주별로 누적되어 어떤 감정 범주의 댓글이 많은지 쉽게 알 수 있다.
+
+------------
+
+# **3. 감정 범주별 주요 단어 확인**
+
+- 로그 오즈비를 이용해 긍정 댓글과 부정 댓글에 상대적으로 어떤 단어가 자주 사용되었는지 확인한다.
+
+------------
+
+## **3-1. 감정 범주별 단어 빈도 계산**
+
+```{r}
+# 1. 토큰화 & 두 글지 이상 한글 단어만 추출
+comment <- score_comment %>%              # 댓글별로 감정 점수를 계산 & 감정 범주가 부여된 객체 in 2-6
+  unnest_tokens(input = reply,            # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,            # 출력 변수명
+                token = "words",          # 단어 기준으로 토큰화
+                drop = F) %>%             # 원문 제거 X
+  filter(!str_detect(word, "[^가-힣]") &  # 한글만 추출
+         str_count(word) >= 2)            # 두 글자 이상 단어만 추출
+
+comment
+```
+
+`Caution!` 앞에서 감정 점수를 계산할 때는 감정 사전의 특수 문자, 모음, 자음으로 된 이모티콘도 활용해야 하므로 특수 문자를 제거하고 두 글자 이상의 한글 단어만 남기는 작업을 [전처리][**2-2. 전처리**]에서 수행하지 않았다. 여기서는 감정 단어가 아니라 의미를 해석할 수 있는 `단어`를 분석하므로 두 글자 이상의 한글 단어만 남겨야 한다.
+
+
+```{r}
+# 2. 감정 및 단어별 빈도 계산
+frequency_word <- comment %>%
+  count(sentiment, word, sort = T)       # sentiment (감정)별 word (단어)의 빈도 계산 / sort = T : 내림차순 정렬
+
+frequency_word
+
+# 긍정 댓글 고빈도 단어
+frequency_word %>%
+  filter(sentiment == "pos")
+
+# 부정 댓글 고빈도 단어
+frequency_word %>%
+  filter(sentiment == "neg")
+```
+
+`Result!` 추출한 단어를 보면 긍정 댓글과 부정 댓글의 내용이 어떻게 다른지 알 수 있다. 하지만 단순히 빈도가 높은 단어를 추출했기 때문에, "봉준호", "기생충" 같은 단어도 추출되었다. 긍정 댓글과 부정 댓글의 차이를 이해하려면 양쪽에서 상대적으로 자주 사용한 단어를 비교해야 한다.
+
+-------------
+
+## **3-2. 로그 오즈비 계산**
+
+```{r}
+# 1. Wide Format Dataset으로 변환
+comment_wide <- frequency_word %>%      # 감정 및 단어별 빈도가 저장되어 있는 객체 in 3-1
+  filter(sentiment != "neu") %>%        # 감정 범주가 "중립"인 단어 제외
+  pivot_wider(names_from = sentiment,   # 변수명으로 입력할 값이 들어 있는 변수 
+              values_from = n,          # 변수에 채워 넣을 값이 들어 있는 변수
+              values_fill = list(n = 0))# 결측값 NA를 0으로 대체
+
+comment_wide
+
+# 2. 로그 오즈비 계산
+comment_wide <- comment_wide %>%
+  mutate(log_odds_ratio = log(((pos + 1) / (sum(pos + 1))) /
+                                ((neg + 1) / (sum(neg + 1)))))
+
+comment_wide
+```
+
+-------------
+
+## **3-3. 상대적으로 중요한 단어 추출**
+
+```{r}
+top10 <- comment_wide %>%                                               # 로그 오즈비가 저장되어 있는 객체 in 3-2
+  mutate(sentiment = ifelse(log_odds_ratio > 0, "pos", "neg")) %>%      # 변수 sentiment에 로그 오즈비가 양수이면 "pos", 음수이면 "neg" 입력
+  group_by(sentiment) %>%                                               # 변수 sentiment에 대해 그룹화 -> 각 항목별로 로그 오즈비가 높은 단어를 추출하기 위해 
+  slice_max(abs(log_odds_ratio), n = 10)                                # 로그 오즈비의 절댓값이 가장 높은 단어 10개 추출
+
+top10 %>% 
+  print(n = Inf)                                                        # 모든 행 출력
+```
+
+`Result!` 출력 결과를 보면 30행으로 구성되어 있다는 것을 알 수 있다. 긍정 댓글과 부정 댓글에서 로그 오즈비가 가장 높은 단어를 10개씩 추출했는데 20행이 아니라 30행인 이유는 부정 댓글에서 로그 오즈비가 "-1.82"인 단어가 모두 추출되었기 때문이다. 빈도가 동일하더라도 원하는 개수만큼만 단어를 추출하기 위해서는 옵션 `with_ties = F`를 지정하면 된다. 해당 옵션을 지정하면 빈도가 동일한 단어의 경우 원본 데이터의 정렬 순서에 따라 단어를 출력한다.
+
+```{r}
+# 빈도가 동일하더라도 원하는 개수만큼 단어 추출
+top10 <- comment_wide %>%                                               # 로그 오즈비가 저장되어 있는 객체 in 3-2
+  mutate(sentiment = ifelse(log_odds_ratio > 0, "pos", "neg")) %>%      # 변수 sentiment에 로그 오즈비가 양수이면 "pos", 음수이면 "neg" 입력
+  group_by(sentiment) %>%                                               # 변수 sentiment에 대해 그룹화 -> 각 항목별로 로그 오즈비가 높은 단어를 추출하기 위해 
+  slice_max(abs(log_odds_ratio), n = 10,                                # 로그 오즈비의 절댓값이 가장 높은 단어 10개 추출
+            with_ties = F)                                              # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10 %>% 
+  print(n = Inf)                                                        # 모든 행 출력
+```
+
+
+-------------
+
+## **3-4. 시각화**
+
+```{r}
+ggplot(top10, aes(x = reorder(word, log_odds_ratio),  # reorder : 항목별 내림차순 정렬
+                  y = log_odds_ratio,                       
+                  fill = sentiment)) +                # 감정 범주에 대해 막대 색깔 다르게 표현
+  geom_col() +                                        # 막대 그래프
+  coord_flip() +                                      # 가로로 회전
+  labs(x = NULL)                                      # x축 제목 제거 -> 막대를 가로로 회전했기 때문에 y축 제목이 제거됨
+```
+
+`Result!` 출력 그래프를 보면 긍정 댓글에서는 "축하", "멋지다"와 같은 단어가 부정 댓글에 비해 상대적으로 많이 사용되었으며, 부정 댓글에서는 "소름", "좌빨"과 같은 단어가 긍정 댓글에 비해 상대적으로 많이 사용되었다는 것을 알 수 있다.
+
+-------------
+
+# **4. 감정 사전 수정**
+
+- [앞의 출력 결과][**3-4. 시각화**]를 보면 "소름", "미친"과 같은 단어는 상대적으로 부정 댓글에 자주 사용되었지만 긍정적인 감정을 극적으로 표현할 때도 해당 단어들을 사용하기 때문에 부정적인 표현이라고 단정하기 어렵다.
+
+```{r}
+# "소름"이 사용된 댓글
+score_comment %>%                             # 댓글별로 감정 점수를 계산 & 감정 범주가 부여된 객체 in 2-6
+  filter(str_detect(reply, "소름")) %>%       # "소름"을 포함한 댓글만 추출
+  select(reply)                               # 다른 변수 제외하고 댓글 내용만 확인
+
+# "미친"이 사용된 댓글
+score_comment %>%                             # 댓글별로 감정 점수를 계산 & 감정 범주가 부여된 객체 in 2-6
+  filter(str_detect(reply, "미친")) %>%       # "미친"을 포함한 댓글만 추출
+  select(reply)                               # 다른 변수 제외하고 댓글 내용만 확인
+```
+
+`Result!` 댓글 원문을 살펴보면 "소름", "미친"이 주로 긍정적인 의미로 사용되었음을 알 수 있다. 
+
+```{r}
+# 감정 사전에서 "소름", "미친"의 감정 점수 확인
+dic %>%                                         # 감정 사전 in 1-1
+  filter(word %in% c("소름", "소름이", "미친")) # "소름", "소름이", "미친"만 추출
+```
+
+`Result!` 감정 사전을 살펴보면, 해당 단어들의 감정 점수가 모두 음수, 즉, 부정 단어로 분류되어 있다.  
+`Caution!` 감정 분석은 감정 사전에 기반을 두기 때문에 텍스트의 맥락이 감정 사전의 맥락과 다르면 이처럼 반대되는 감정 점수를 부여하는 오류가 발생한다. 좀 더 정확하게 분석하려면 감정 사전을 수정해서 활용해야 한다. 수정할 때 같은 단어라도 맥락에 따라 표현하는 감정이 다르기 때문에 단어의 감정 점수는 신중하게 정해야 한다. 예를 들어, "빠르다"라는 단어는 스마트폰 사용 후기라면 속도가 빠르다는 의미로 사용될 테니 긍정어라고 볼 수 있다. 하지만 동영상 강의 후기라면 강의 진행 속도나 강사의 말이 빠르다는 의미로 사용될테니 부정어라고 볼 수 있다. 분석하는 텍스트의 맥락에 맞게 단어의 감정 점수를 정해야 정확히 분석할 수 있다. 
+
+ 
+------------
+
+## **4-1. 감정 사전 수정**
+
+- 기존의 감정 사전에서 "소름", "소름이", "미친"의 `polarity`를 "2"로 수정해 새로운 감정 사전을 만든다.
+
+```{r}
+# 새로운 감정 사전
+new_dic <- dic %>%                                                              # 감정 사전 in 1-1
+  mutate(polarity = ifelse(word %in% c("소름", "소름이", "미친"), 2, polarity)) # "소름", "소름이", "미친"의 polarity를 2로 수정
+
+new_dic %>% 
+  filter(word %in% c("소름", "소름이", "미친"))                                 # "소름", "소름이", "미친"만 추출
+```
+
+------------
+
+## **4-2. 수정한 사전으로 감정 점수 부여**
+
+```{r}
+new_word_comment <- word_comment1 %>%                        # 원본 댓글을 단어 기준으로 토큰화 & 감정 점수와 범주가 부여된 객체 in 2-4
+  select(-polarity) %>%                                      # 기존의 감정 사전을 이용해 부여한 감정 점수 제거
+  left_join(new_dic, by = "word") %>%                        # 수정한 감정 사전을 이용해 감정 점수 부여 -> 수정한 감정 사전과 변수 word를 기준으로 결합
+  mutate(polarity = ifelse(is.na(polarity), 0, polarity))    # 결측값 NA를 0으로 대체 -> 단어가 감정 사전에 없으면 결측값이 부여되기 때문 
+
+new_word_comment
+```
+
+-----------
+
+## **4-3. 댓글별 감정 점수 계산**
+
+```{r}
+new_score_comment <- new_word_comment %>%           # 감정 점수가 부여된 객체 in 4-2
+  group_by(id, reply) %>%                           # 변수 id와 reply에 대해 그룹화 수행 -> 각 댓글별로 점수합을 계산하기 위해
+  summarise(score = sum(polarity)) %>%              # 점수합 계산
+  ungroup()                                         # 그룹 해제
+
+# 긍정 댓글
+new_score_comment %>% 
+  select(score, reply) %>%                          # 변수 score와 reply만 선택
+  arrange(-score)                                   # 점수를 내림차순 정렬
+
+# 부정 댓글
+new_score_comment %>%
+  select(score, reply) %>%                          # 변수 score와 reply만 선택
+  arrange(score)                                    # 점수를 오름차순 정렬
+```
+
+-----------
+
+## **4-4. 감정 경향 확인**
+
+```{r}
+# 1. 감정 분류
+new_score_comment <- new_score_comment %>%          # 댓글별로 감정 점수를 계산한 객체 in 4-3
+  # 변수 sentiment에 감정 점수가 1 이상이면 "pos", -1이하면 "neg", 그 외는 "neu"로 입력
+  mutate(sentiment = ifelse(score >=  1, "pos",
+                            ifelse(score <= -1, "neg", "neu")))
+
+new_score_comment
+
+# 2. 수정한 감정 사전을 활용한 댓글의 전반적인 감정 경향
+new_score_comment %>%                              # 감정 범주가 할당된 객체 
+  count(sentiment) %>%                             # 변수 sentiment에 대해 그룹화 수행 -> 각 항목별로 비율을 계산하기 위해
+  mutate(ratio = n/sum(n)*100)                     # 비율 계산
+```
+
+
+```{r, eval=FALSE}
+# 댓글의 전반적인 감정 경향 비교
+# 원본 감정 사전 활용한 댓글의 전반적인 감정 경향
+score_comment %>%
+  count(sentiment) %>%
+  mutate(ratio = n/sum(n)*100)
+
+# 수정한 감정 사전을 활용한 댓글의 전반적인 감정 경향
+new_score_comment %>%                              
+  count(sentiment) %>%                             
+  mutate(ratio = n/sum(n)*100)                    
+```
+
+
+<center>
+![](./image/compare1.png){width=100%}
+</center>
+</br>
+
+`Result!` 출력 결과를 보면 원본 감정 사전을 활용했을 때와 비교해 부정 댓글("neg")의 비율은 10.5%에서 8.89%로 줄어들고, 긍정 댓글("pos")의 비율은 19.5%에서 21.3%로 늘어났다. 감정 범주 비율이 달라진 이유는 수정한 사전으로 감정 점수를 부여하자 "소름", "소름이", "미친"을 사용한 댓글 일부가 긍정 댓글로 분류되었기 때문이다.
+
+
+
+```{r, eval = FALSE}
+# "소름", "소름이", "미친"을 사용한 댓글의 감정 범주 빈도 비교
+word <- "소름|소름이|미친"                   # 함수 str_detect에 여러 문자를 입력할 때는 "|"로 구분
+
+# 원본 감정 사전 활용
+score_comment %>%
+  filter(str_detect(reply, word)) %>%        # "소름", "소름이", "미친"을 사용한 댓글 추출
+  count(sentiment)                           # 빈도 계산
+
+# 수정한 감정 사전 활용
+new_score_comment %>%
+  filter(str_detect(reply, word)) %>%        # "소름", "소름이", "미친"을 사용한 댓글 추출
+  count(sentiment)                           # 빈도 계산
+```
+
+<center>
+![](./image/compare2.png){width=100%}
+</center>
+</br>
+
+
+`Result!` "소름", "소름이", "미친"을 사용한 댓글의 감정 범주 빈도가 달라졌음을 알 수 있다.  
+`Caution!` 수정한 사전을 사용하더라도 댓글에 함께 사용된 단어들의 감정 점수가 낮으면 부정 댓글로 분류될 수 있다.
+
+----------
+
+## **4-5. 감정 범주별 주요 단어 확인**
+
+```{r}
+# 1. 토큰화 & 두 글지 이상 한글 단어만 추출
+new_comment <- new_score_comment %>%         # 감정 범주가 할당된 객체 in 4-4
+  unnest_tokens(input = reply,               # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,               # 출력 변수명
+                token = "words",             # 단어 기준으로 토큰화
+                drop = F) %>%                # 원문 제거 X
+  filter(!str_detect(word, "[^가-힣]") &     # 한글만 추출
+           str_count(word) >= 2)             # 두 글자 이상 단어만 추출
+
+new_comment
+
+# 2. 감정 및 단어별 빈도 구하기
+new_frequency_word <- new_comment %>%
+  count(sentiment, word, sort = T)           # sentiment (감정)별 word (단어)의 빈도 계산 / sort = T : 내림차순 정렬
+
+new_frequency_word
+
+# 3. Wide Format Dataset으로 변환
+new_comment_wide <- new_frequency_word %>%
+  filter(sentiment != "neu") %>%             # 감정 범주가 "중립"인 단어 제외
+  pivot_wider(names_from = sentiment,        # 변수명으로 입력할 값이 들어 있는 변수 
+              values_from = n,               # 변수에 채워 넣을 값이 들어 있는 변수
+              values_fill = list(n = 0))     # 결측값 NA를 0으로 대체
+
+new_comment_wide
+
+# 4. 로그 오즈비 계산
+new_comment_wide <- new_comment_wide %>%
+  mutate(log_odds_ratio = log(((pos + 1) / (sum(pos + 1))) /
+                                ((neg + 1) / (sum(neg + 1)))))
+
+new_comment_wide
+
+
+# 5. 상대적으로 중요한 단어 추출
+new_top10 <- new_comment_wide %>%
+  mutate(sentiment = ifelse(log_odds_ratio > 0, "pos", "neg")) %>%      # 변수 sentiment에 로그 오즈비가 양수이면 "pos", 음수이면 "neg" 입력
+  group_by(sentiment) %>%                                               # 변수 sentiment에 대해 그룹화 -> 각 항목별로 로그 오즈비가 높은 단어를 추출하기 위해 
+  slice_max(abs(log_odds_ratio), n = 10,                                # 로그 오즈비의 절댓값이 가장 높은 단어 10개 추출
+            with_ties = F)                                              # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+new_top10
+
+# 6. 시각화
+ggplot(new_top10, aes(x = reorder(word, log_odds_ratio),  # reorder : 항목별 내림차순 정렬
+                      y = log_odds_ratio,                       
+                      fill = sentiment)) +                # 감정 범주에 대해 막대 색깔 다르게 표현
+  geom_col() +                                            # 막대 그래프
+  coord_flip() +                                          # 가로로 회전
+  labs(x = NULL)                                          # x축 제목 제거 -> 막대를 가로로 회전했기 때문에 y축 제목이 제거됨
+```
+
+`Result!` 출력 그래프를 보면 긍정 댓글에서는 "축하", "소름"과 같은 단어가 부정 댓글에 비해 상대적으로 많이 사용되었으며, 부정 댓글에서는 "좌빨", "못한"과 같은 단어가 긍정 댓글에 비해 상대적으로 많이 사용되었다는 것을 알 수 있다. [원본 감정 사전을 활용하여 분석하였을 때][**3-4. 시각화**]와 달리 "소름"의 로그 오즈비는 양수이다.
+
+
+```{r, eval = FALSE}
+# 로그 오즈비 분석 결과 비교
+# 원본 감정 사전 활용한 로그 오즈비 결과
+top10 %>% 
+  select(-pos, -neg) %>%                   # 변수 pos, neg 제외
+  arrange(-log_odds_ratio) %>%             # 내림차순 정렬
+  print(n = Inf)                           # 모든 행 출력
+
+
+# 수정한 감정 사전 활용한 로그 오즈비 결과
+new_top10 %>%
+  select(-pos, -neg) %>%                   # 변수 pos, neg 제외
+  arrange(-log_odds_ratio) %>%             # 내림차순 정렬
+  print(n = Inf)                           # 모든 행 출력
+```
+
+<center>
+![](./image/compare3.png){width=100%}
+</center>
+</br>
+
+`Result!` 원본 감정 사전을 사용했을 때와 달리 "소름"이 긍정 댓글에 자주 사용한 단어로 추출되고 "미친"은 목록에서 사라졌다. 수정한 감정 사전을 이용했을 때 "미친"이 목록에서 사라진 이유는 로그 오즈비가 10위 안에 들지 못할 정도로 낮기 때문이다. 다음 코드의 출력 결과를 보면 "미친"의 로그 오즈비가 1.80인 것을 알 수 있다. 
+
+```{r}
+# "미친"의 로그 오즈비
+new_comment_wide %>%
+  filter(word == "미친")      
+```
+
+
+----------
+
+## **4-6. 주요 단어가 사용된 댓글 확인**
+
+- 로그 오즈비가 높은 두 단어("축하", "소름")와 낮은 두 단어("좌빨", "못한")를 사용한 댓글을 추출해 내용을 확인한다.
+
+```{r}
+# 긍정 댓글 원문
+new_score_comment %>%                        # 감정 범주가 할당된 객체 in 4-4
+  filter(sentiment == "pos" &                # 긍정 댓글이면서 "축하"를 사용한 댓글 추출
+           str_detect(reply, "축하")) %>% 
+  select(reply)                              # 다른 변수 제외하고 댓글 내용만 확인
+
+new_score_comment %>%                        # 감정 범주가 할당된 객체 in 4-4
+  filter(sentiment == "pos" &                # 긍정 댓글이면서 "소름"을 사용한 댓글 추출
+           str_detect(reply, "소름")) %>% 
+  select(reply)                              # 다른 변수 제외하고 댓글 내용만 확인
+```
+
+`Result!` 긍정 댓글은 수상을 축하하고 대한민국의 위상이 올라갔다는 내용이 많다는 것을 알 수 있다.
+
+```{r}
+# 부정 댓글 원문
+new_score_comment %>%                        # 감정 범주가 할당된 객체 in 4-4
+  filter(sentiment == "neg" &                # 부정 댓글이면서 "좌빨"을 사용한 댓글 추출
+           str_detect(reply, "좌빨")) %>%
+  select(reply)                              # 다른 변수 제외하고 댓글 내용만 확인
+ 
+new_score_comment %>%                        # 감정 범주가 할당된 객체 in 4-4
+  filter(sentiment == "neg" &                # 부정 댓글이면서 "못한"을 사용한 댓글 추출
+           str_detect(reply, "못한")) %>%
+  select(reply)                              # 다른 변수 제외하고 댓글 내용만 확인
+```
+
+`Result!` 부정 댓글은 수상 자체보다는 감독의 정치 성향이나 댓글을 단 사용자들의 정치 성향을 비판하는 내용이 많다는 것을 알 수 있다.  
+
+-----------
+
+# **5. 신조어에 감정 점수 부여**
+
+- 감정 분석은 감정 사전에 기반을 두기 때문에 "쩐다", "핵노잼"처럼 감정 사전에 없는 신조어에는 감정 점수가 부여되지 않는 한계가 있다.
+
+```{r}
+# 예시 : 신조어가 포함된 문장
+df <- tibble(sentence = c("이번 에피소드 쩐다", 
+                          "이 영화 핵노잼")) %>% 
+  # 토큰화
+  unnest_tokens(input = sentence,                              # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,                                 # 출력 변수명
+                token = "words",                               # 단어 기준으로 토큰화
+                drop = F)                                      # 원문 제거 X
+
+df %>% 
+  left_join(dic, by = "word") %>%                              # 토큰화 결과와 감정 사전을 변수 word를 기준으로 결합 
+  mutate(polarity = ifelse(is.na(polarity), 0, polarity)) %>%  # 결측값 NA를 0으로 대체 -> 단어가 감정 사전에 없으면 결측값이 부여되기 때문
+  group_by(sentence) %>%                                       # 변수 sentence에 대해 그룹화 수행 -> 각 댓글별로 점수합을 계산하기 위해
+  summarise(score = sum(polarity))                             # 점수합 계산
+```
+
+`Result!` 두 문장 모두 감정 사전에 없는 단어여서 감정 점수가 부여되지 않았다. 다음과 같이 감정 사전에 신조어와 감정 점수를 추가하면 신조어에도 감정 점수를 부여할 수 있다.
+
+```{r}
+# 신조어 목록 생성
+newword <- tibble(word = c("쩐다", "핵노잼"),                  # 신조어 
+                  polarity = c(2, -2))                         # 감정 점수
+
+newword
+
+# 사전에 신조어 추가
+newword_dic <- bind_rows(dic, newword)                         # 원본 감정 사전과 신조어 목록을 행으로 결합
+
+newword_dic
+
+# 새로운 사전을 활용해 감정 점수 부여
+df %>% 
+  left_join(newword_dic, by = "word") %>%                      # 토큰화 결과와 새로운 감정 사전을 변수 word를 기준으로 결합 
+  mutate(polarity = ifelse(is.na(polarity), 0, polarity)) %>%  # 결측값 NA를 0으로 대체 -> 단어가 감정 사전에 없으면 결측값이 부여되기 때문
+  group_by(sentence) %>%                                       # 변수 sentence에 대해 그룹화 수행 -> 각 댓글별로 점수합을 계산하기 위해
+  summarise(score = sum(polarity))                             # 점수합 계산
+```
+
+`Caution!` 어떤 신조어를 사전에 추가할지 모르겠다면 감정 점수가 부여되지 않은 단어 중에 빈도가 높은 단어를 살펴보면 도움이 된다. 빈도가 높은 단어 중에 감정을 표현하는 단어가 있으면 점수를 부여해 사전에 추가하면 된다.
+
+-----------
+
+# **요약**
+
+```{r}
+# 1. 자주 사용한 감정 단어 확인
+# 1-1. 단어에 감정 점수 부여 
+word_comment <- word_comment %>%                           # 단어 기준으로 토큰화 & 전처리를 수행한 객체 in 2-2
+  left_join(dic, by = "word") %>%                          # 토큰화 결과와 감정 사전을 변수 word를 기준으로 결합 
+  mutate(polarity = ifelse(is.na(polarity), 0, polarity))  # 결측값 NA를 0으로 대체 -> 단어가 감정 사전에 없으면 결측값이 부여되기 때문
+
+word_comment
+
+# 1-2. 감정 분류
+word_comment <- word_comment %>%
+  # 감정 분류 : 변수 sentiment에 polarity가 2이면 "pos", -2이면 "neg", 둘 다 아니면 "neu"로 입력 
+  mutate(sentiment = ifelse(polarity ==  2, "pos",
+                            ifelse(polarity == -2, "neg", "neu")))
+
+word_comment
+
+# 1-3. 자주 사용한 감정 단어 추출
+top10_sentiment <- word_comment %>%
+  filter(sentiment != "neu") %>%             # 감정 범주가 "중립"인 댓글 제외
+  count(sentiment, word) %>%                 # 변수 sentiment의 항목별 단어 빈도 계산 
+  group_by(sentiment) %>%                    # 변수 sentiment에 대해 그룹화 수행 -> 각 항목별로 자주 사용한 단어를 추출하기 위해
+  slice_max(n, n = 10)                       # 자주 사용한 단어 10개 추출
+
+top10_sentiment
+
+
+# 2. 텍스트의 감정 점수 계산
+# 텍스트별로 단어의 감정 점수 합산
+score_comment <- word_comment %>%
+  group_by(id, reply) %>%                           # 변수 id와 reply에 대해 그룹화 수행 -> 각 댓글별로 점수합을 계산하기 위해
+  summarise(score = sum(polarity)) %>%              # 점수합 계산
+  ungroup()                                         # 그룹 해제
+
+score_comment
+
+# 3. 감정 범주별 주요 단어 확인
+# 3-1. 감정 범주 변수 생성
+score_comment <- score_comment %>%
+  # 변수 sentiment에 감정 점수가 1 이상이면 "pos", -1이하면 "neg", 그 외는 "neu"로 입력
+  mutate(sentiment = ifelse(score >=  1, "pos",
+                            ifelse(score <= -1, "neg", "neu")))
+
+score_comment
+
+# 3-2. 토큰화 & 두 글지 이상 한글 단어만 추출
+comment <- score_comment %>%
+  unnest_tokens(input = reply,            # 토큰화를 수행할 텍스트가 포함된 변수명
+                output = word,            # 출력 변수명
+                token = "words",          # 단어 기준으로 토큰화
+                drop = F) %>%             # 원문 제거 X
+  filter(!str_detect(word, "[^가-힣]") &  # 한글만 추출
+           str_count(word) >= 2)          # 두 글자 이상 단어만 추출
+
+comment
+
+# 3-3. 감정 범주별 단어 빈도 구하기
+frequency_word <- comment %>%
+  count(sentiment, word, sort = T)        # sentiment (감정)별 word (단어)의 빈도 계산 / sort = T : 내림차순 정렬
+
+frequency_word
+
+# 3-4. Wide Format Dataset으로 변환
+comment_wide <- frequency_word %>%      # 감정 및 단어별 빈도가 저장되어 있는 객체 in 3-1
+  filter(sentiment != "neu") %>%        # 감정 범주가 "중립"인 단어 제외
+  pivot_wider(names_from = sentiment,   # 변수명으로 입력할 값이 들어 있는 변수 
+              values_from = n,          # 변수에 채워 넣을 값이 들어 있는 변수
+              values_fill = list(n = 0))# 결측값 NA를 0으로 대체
+
+comment_wide
+
+# 3-5. 로그 오즈비 계산
+comment_wide <- comment_wide %>%
+  mutate(log_odds_ratio = log(((pos + 1) / (sum(pos + 1))) /
+                                ((neg + 1) / (sum(neg + 1)))))
+
+comment_wide
+
+# 3-6. 긍정, 부정 텍스트에 상대적으로 자주 사용한 단어 추출
+top10 <- comment_wide %>%
+  mutate(sentiment = ifelse(log_odds_ratio > 0, "pos", "neg")) %>%      # 변수 sentiment에 로그 오즈비가 양수이면 "pos", 음수이면 "neg" 입력
+  group_by(sentiment) %>%                                               # 변수 sentiment에 대해 그룹화 -> 각 항목별로 로그 오즈비가 높은 단어를 추출하기 위해 
+  slice_max(abs(log_odds_ratio), n = 10,                                # 로그 오즈비의 절댓값이 가장 높은 단어 10개 추출
+            with_ties = F)                                              # 빈도가 동일하더라도 옵션 n에 지정한 개수만큼만 단어 추출
+
+top10
+```
+

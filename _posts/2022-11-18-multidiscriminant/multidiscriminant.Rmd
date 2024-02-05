@@ -1,0 +1,638 @@
+---
+title: "Discriminant Analysis"
+description: |
+  Description for Discriminant Analysis
+author:
+  - name: Yeongeun Jeon
+date: 11-18-2022
+preview: preview.PNG
+categories: Multivariate Data Analysis
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+- **참고 : R을 활용한 다변량 자료분석 방법론, 강현철 $\cdot$ 연규필 $\cdot$ 한상태 저**
+
+# **1. 재무지표 데이터**
+
+- 판별분석을 수행하기 위해 사용되는 데이터는 [자유아카데미](http://www.freeaca.com/new/library/BoardFileList.aspx?page=1&sword=%eb%8b%a4%eb%b3%80%eb%9f%89&stype=title&area=2)에서 출판한 책 **R을 활용한 다변량 자료분석 방법론**의 데이터 파일 중 "finance.csv"이다.
+- 이 데이터는 금융거래의 거래인에 관한 자료로서, 변수들은 다음과 같다.
+    1. $x_1$ : 총부채 대비 현금 유출입
+    2. $x_2$ : 총자산 대비 순이익
+    3. $x_3$ : 채무 대비 자산
+    4. $x_4$ : 순매출 대비 자산
+    5. $y$ : "1 = 파산 기업", "2 = 건전 기업"
+- 위와 같은 재무지표 데이터를 이용하여 거래인의 신용등급을 판별하고자 한다.
+
+```{r}
+# 데이터 불러오기
+finance <- read.csv("C:/Users/User/Desktop/finance.csv")
+head(finance)
+
+# 데이터 전처리
+pacman::p_load("dplyr")
+
+finance.X <- finance %>%
+  select(2:5)                                      # 판별변수 선택 
+
+head(finance.X)
+```
+
+※ 비록 예제에서는 적용하지 않겠지만, 데이터의 전처리는 판별분석의 응용에서 중요하다. 판별분석의 적용에 앞서 수치형 변수는 중심화와 척도화, 즉,  함수 `scale(, center = TRUE, scale = TRUE)`를 이용하여 정규화를 수행하여야 한다.
+
+----------------------
+
+# **2. 다변량 정규분포에 기초한 판별분석**
+
+- 부분모집단들이 $p$차원 다변량 정규분포를 따르는 경우, 판별분석은 `부분집단별 모공분산행렬의 동일성 여부`에 따라 선형 판별분석과 이차 판별분석으로 구분되어 질 수 있다.
+    - 만약 총 $G$개의 부분집단의 모공분산행렬이 동일하다면, 즉, $\boldsymbol{\Sigma}_1=\ldots=\boldsymbol{\Sigma}_G=\boldsymbol{\Sigma}$, 선형 판별분석을 수행한다.
+    - 만약 총 $G$개의 부분집단의 모공분산행렬이 동일하지 않다면, 이차 판별분석을 수행한다.
+- $G$개의 부분집단의 모공분산행렬 동일성 검정은 Package `biotools`에서 제공하는 함수 `boxM()`을 통해 수행할 수 있다.
+
+```{r}
+# 모공분산행렬의 동일성에 대한 검정
+pacman::p_load("biotools")
+
+finance.boxM <- boxM(finance.X,                   # 데이터행렬
+                     finance$y)                   # 집단변수
+finance.boxM
+```
+
+`Result!` 가설 $H_0 : \boldsymbol{\Sigma}_1=\boldsymbol{\Sigma}_2$, $H_1 : \boldsymbol{\Sigma}_1\ne\boldsymbol{\Sigma}_2$에 대하여, 카이제곱 검정통계량 $\chi^2$ 값은 64.869, $p$-값은 0에 가깝다. 이에 근거하여, 유의수준 5%에서 $p$-값이 0.05보다 작기 때문에 귀무가설 $H_0$를 기각할 수 있다. 즉, 두 부분집단의 모공분산행렬은 동일하지 않다.
+
+※ 하지만, 판별분석에 대해 전반적으로 설명하기 위해 모공분산행렬의 동일성 가정을 만족하지 않아도 재무지표 데이터를 이용한다.
+
+-----------------------
+
+## **2-1. 선형 판별분석**
+
+- 모공분산행렬에 대한 동일성, 즉, $\boldsymbol{\Sigma}_1=\ldots=\boldsymbol{\Sigma}_G=\boldsymbol{\Sigma}$을 가정하는 경우 공통 공분산행렬 $\boldsymbol{\Sigma}$을 합동 표본공분산행렬(Pooled Sample Covariance Matirx) $\boldsymbol{S}=\sum_{g=1}^G \frac{(n_g-1)\boldsymbol{S}_g}{n-g}$로 대치할 수 있다.
+    - $n$ : 전체 개체 수
+    - $n_g$ : 집단 $g$의 개체 수
+    - $\boldsymbol{S}_g$ : 집단 $g$의 표본공분산행렬
+- 모평균벡터도 표본평균벡터 $\bar{\boldsymbol{X}}_g$로 대치하면 다변량 정규밀도함수로부터 다음과 같은 선형 판별함수를 얻을 수 있다.
+$$
+\begin{align}
+L_g(\boldsymbol{X})=-\frac{1}{2}\bar{\boldsymbol{X}}^T_g\boldsymbol{S}^{-1}\bar{\boldsymbol{X}}_g + \bar{\boldsymbol{X}}^T_g\boldsymbol{S}^{-1}\boldsymbol{X}
+\end{align}
+$$
+    - 여기서 $L_g(\boldsymbol{X})$은 집단 $g$에 속할 확률인 $P(y=g|\boldsymbol{X})$을 의미한다.
+    
+```{r}
+# 집단 분류
+x1 <- as.matrix(finance.X[which(finance$y==1),])   # y = 1인 집단 
+x2 <- as.matrix(finance.X[which(finance$y==2),])   # y = 2인 집단
+
+n1 <- nrow(x1)                                     # y = 1인 집단의 개체 개수
+n2 <- nrow(x2)                                     # y = 2인 집단의 개체 개수
+
+# 평균벡터 계산
+xbar1 <- apply(x1, 2, mean)
+print(xbar1,digits=4)
+
+xbar2 <- apply(x2, 2, mean)
+print(xbar2,digits=4)
+
+# 합동 표본공분산 행렬
+pacman::p_load("Morpho")
+
+# 집단에 대한 합동 표본공분산행렬
+S <- covW(finance.X,                               # 데이터행렬
+          as.factor(finance$y))                    # 집단변수
+S
+```
+
+`Caution!` Package `Morpho`에서 제공하는 함수 `covW()`를 통해 합동 표본공분산행렬을 얻을 수 있다.  
+
+```{r}
+# 선형 판별계수
+L1.a <- -(1/2)*t(xbar1)%*%solve(S)%*%xbar1   
+print(L1.a,digits=4)
+L1.b <- solve(S)%*%xbar1 
+print(L1.b,digits=4)
+
+L2.a <- -(1/2)*t(xbar2)%*%solve(S)%*%xbar2  
+print(L2.a,digits=4)
+L2.b <- solve(S)%*%xbar2   
+print(L2.b,digits=4)
+```
+
+`Result!` 유도된 선형 판별함수는 다음과 같으며, 각 선형 판별함수들은 집단 1, 2에 속할 확률이다.
+$$
+\begin{align}
+L_1(\boldsymbol{x})&=-4.384+2.844x_1-16.625x_2+1.728x_3+11.997x_4,\\
+L_2(\boldsymbol{x})&=-6.756+4.739x_1-9.065x_2+3.325x_3+10.078x_4.
+\end{align}
+$$
+또한, 두 집단 선형 판별함수의 차이를 계산하면 다음과 같다.
+$$
+\begin{align}
+L(\boldsymbol{x})=L_2(\boldsymbol{x})-L_1(\boldsymbol{x})=-2.372+1.895x_1+7.560x_2+1.597x_3-1.919x_4.
+\end{align}
+$$
+선형 판별계수들의 부호에 관심을 가지고 이를 해석해보면, $x_1$(총부채 대비 현금 유출입), $x_2$(총자산 대비 순이익), $x_3$(채무 대비 자산)이 클수록 $L(\boldsymbol{x})$ 값이 커지므로 파산 기업($y=1$)에 비해 건전 기업($y=2$)에 속할 확률의 추정치가 커지며, 반면에 $x_4$(순매출 대비 자산)이 클수록 $L(\boldsymbol{x})$ 값이 작아지므로 건전 기업($y=2$)에 속할 확률의 추정치가 작아짐을 알 수 있다.
+
+----------------------
+
+`Caution!` Package `MASS`에서 제공하는 함수 `lda()`를 통해 `두 집단 선형 판별함수의 차이` $L(\boldsymbol{x})$를 쉽게 얻을 수 있다. 다만, 함수 `lda()`에서는 각 변수들을 중심화(평균을 0으로 만듦)한 후 분석을 수행하며, 판별계수벡터를 정규화한다. 함수 `lda()`에 대한 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/MASS/versions/7.3-58.1/topics/lda)를 참고한다.
+
+```{r}
+# 함수 lda
+pacman::p_load("MASS")
+
+finance.lda <- lda(y ~ x1 + x2 + x3 + x4,           # formula : 반응변수(집단변수) ~ 판별변수
+                   # prior = c(1/2, 1/2),           # 사전확률
+                   data = finance)               
+finance.lda
+```
+
+`Result!` "Prior probabilities of groups"는 사전확률을 의미하며, 함수 `lda()`의 옵션 `prior`을 이용하여 직접 지정할 수 있다. 만약 옵션으로 따로 지정해주지 않는다면, 예제처럼 데이터에서 계산된 각 집단의 비율이 사전확률로 지정된다. 즉, 데이터 "finance"에서 파산 기업($y=1$)의 비율은 46%, 건전 기업($y=2$)의 비율은 54%이다. "Groups means"는 판별변수들의 집단별 평균을 의미한다. 예를 들어, 변수 $x_4$(순매출 대비 자산)은 두 집단의 평균이 0.438과 0.428로서 큰 차이가 없으므로, 이 변수는 판별에 기여하는 정도가 작을 것임을 짐작할 수 있다. "Coefficients of linear discriminants"는 선형 판별계수로 이 계수들을 이용하여 선형 판별함수를 표현하면 다음과 같다.
+$$
+\begin{align}
+L(\boldsymbol{x})=1.002(x_1-\bar{x}_1)+3.999(x_2-\bar{x}_2)+0.845(x_3-\bar{x}_3)-1.015(x_4-\bar{x}_4).
+\end{align}
+$$
+여기서, $\bar{x}_i$는 $i$번째 판별변수의 평균을 의미한다.  
+선형 판별계수들의 부호에 관심을 가지고 이를 해석해보면, $x_1$(총부채 대비 현금 유출입), $x_2$(총자산 대비 순이익), $x_3$(채무 대비 자산)이 클수록 $L(\boldsymbol{x})$ 값이 커지므로 파산 기업($y=1$)에 비해 건전 기업($y=2$)에 속할 확률의 추정치가 커지며, 반면에 $x_4$(순매출 대비 자산)이 클수록 $L(\boldsymbol{x})$ 값이 작아지므로 건전 기업($y=2$)에 속할 확률의 추정치가 작아진다. 
+
+-----------------------
+
+```{r}
+# 새로운 개체에 대한 집단 예측
+pred.finance <- predict(finance.lda,                # 함수 lda로부터 출력된 객체
+                        finance)                    # 새로운 데이터
+pred.finance
+```
+
+
+`Caution!` 함수 `predict()`를 이용하면 유도된 선형 판별함수로부터 새로운 개체에 대한 집단 예측을 수행할 수 있다.  
+`Result!` 함수 `predict()`는 3개의 객체를 생성한다.  
+
+
+1. `x` : 새로운 개체에 대한 선형 판별점수 $L(\boldsymbol{x})$ 값이 저장되어 있다.  
+2. `posterior` : 예측된 소속 확률 $P(y=g|\boldsymbol{x})$이 저장되어 있다.  
+3. `class` : 예측된 소속 집단이 저장되어 있다. 
+    - 위의 예제에서는 다음과 같이 집단을 예측한다.  
+        - $P(y=1|\boldsymbol{x})>P(y=2|\boldsymbol{x})$, 즉, $L(\boldsymbol{x})<0$이면, 집단 1(파산 기업)에 분류  
+        - $P(y=1|\boldsymbol{x})<P(y=2|\boldsymbol{x})$, 즉, $L(\boldsymbol{x})>0$이면, 집단 2(건전 기업)에 분류
+
+```{r}
+# 선형 판별점수, 예측 확률, 예측 집단
+pf <- cbind(finance, pred.finance$x, pred.finance$posterior, pred.finance$class)
+pf
+```
+
+----------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+finance.ctbl1 <- table(finance$y,                   # 실제 집단
+                       pred.finance$class)          # 예측된 집단
+finance.ctbl1
+
+Desc(finance.ctbl1,                                 # 도수분포표
+     digits = 4)
+```
+
+`Caution!` Package `DescTools`에서 제공하는 함수 `Desc()`를 이용하여 오분류표를 작성할 수 있다.  
+`Result!` 원래 집단 1에 속하는 21개의 개체 중 18개(18/21=85.7%)는 집단 1에 제대로 분류되었으나 3개(3/21=14.3%)는 집단 2로 잘못 분류되었다. 또한, 원래 집단 2에 속하는 25개의 개체 중 1개(1/25=4%)는 집단 1로 잘못 분류되었으나 24개(24/25=96%)는 집단 2에 제대로 분류되었다. 유도된 선형 판별함수에 대한 오류율은 (3+1)/46=8.7%이며, 정확도는 (18+24)/46=91.3%이다.
+
+-----------------------
+
+## **2-2. 이차 판별분석**
+
+- 선형 판별함수는 부분모집단의 공분산행렬이 같다는 가정 하에 유도된 것이므로, 이러한 가정이 적절하지 않은 데이터에 대해서는 상당히 왜곡된 결과를 도출할 수 있다.
+- 부분모집단의 공분산행렬이 다른 경우, 비선형 판별함수인 이차 판별함수를 통해 판별분석을 수행한다.
+- 다변량 정규분포를 가정한다면, 집단 $g$에 속할 확률 $P(y=g|\boldsymbol{X})$는 다변량 정규밀도함수에 비례하며, 다변량 정규밀도 함수는 다음과 같은 이차함수로 나타낼 수 있다.
+$$
+\begin{align}
+Q_g(\boldsymbol{X})=(\boldsymbol{X}-\bar{\boldsymbol{X}}_g)^T\boldsymbol{S}^{-1}_g(\boldsymbol{X}-\bar{\boldsymbol{X}}_g).
+\end{align}
+$$
+    - 즉, $P(y=g|\boldsymbol{X})\propto Q_g(\boldsymbol{X})$
+- 이차 판별분석은 Package `MASS`에서 제공하는 함수 `qda()`를 통해 수행할 수 있으며, 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/MASS/versions/7.3-58.1/topics/qda)를 참고한다.
+
+```{r}
+# 이차 판별분석
+pacman::p_load("MASS")
+
+finance.qda <- qda(y ~ x1 + x2 + x3 + x4,           # formula : 반응변수(집단변수) ~ 판별변수
+                   data = finance)
+finance.qda
+```
+
+`Caution!` 이차 판별분석에서는 판별계수벡터를 출력하지 않는다.
+
+-------------------------
+
+```{r}
+# 새로운 개체에 대한 집단 예측
+pred2.finance <- predict(finance.qda,               # 함수 qda로부터 출력된 객체
+                         finance)                   # 새로운 데이터
+cbind(finance, pred2.finance$posterior, pred2.finance$class)
+```
+
+`Caution!` 이차 판별분석에서 함수 `predict()`는 판별점수를 출력하지 않는다.
+
+-------------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+finance.ctbl2 <- table(finance$y,                   # 실제 집단
+                       pred2.finance$class)         # 예측된 집단
+finance.ctbl2
+
+Desc(finance.ctbl2,                                 # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 집단 1에 속하는 21개의 개체 중 19개(19/21=90.5%)는 집단 1에 제대로 분류되었으나 2개(5/21=9.5%)는 집단 2로 잘못 분류되었다. 또한, 원래 집단 2에 속하는 25개의 개체 중 1개(1/25=4%)는 집단 1로 잘못 분류되었으나 24개(24/25=96%)는 집단 2에 제대로 분류되었다. 유도된 선형 판별함수에 대한 오류율은 (2+1)/46=6.5%이며, 정확도는 (19+24)/46=93.5%이다. 이는 앞선 [선형 판별분석][**2-1. 선형 판별분석**]보다 정확도가 증가하였음을 의미한다.
+
+-------------------------
+
+`Caution!` Package `klaR`에서 제공하는 함수 `partimat()`을 통해 판별분석의 분류 영역을 각 판별변수의 쌍에 대하여 표현할 수 있다. 
+
+```{r}
+# 그래프적 표현
+pacman::p_load("klaR")
+
+finance$y <- as.factor(finance$y)
+
+# 선형 판별함수
+partimat(y ~ x1 + x2 + x3 + x4,      
+         data = finance,
+         method = "lda")
+
+# 이차 판별함수
+partimat(y ~ x1 + x2 + x3 + x4,
+         data = finance,
+         method = "qda")
+```
+
+`Result!` 그래프를 통해 선형 판별함수와 이차 판별함수의 "선형", "이차"라는 용어의 의미를 이해할 수 있다. 선형 판별함수는 각 판별변수의 쌍에 대하여 집단 1과 2는 선형(직선)으로 분류되었으며, 이차 판별함수는 집단 1과 2는 비선형으로 분류되었다. 또한, 각 집단에 대해 잘못 분류된 개체는 빨간색으로 표시되어 있다.
+
+-------------------------
+
+# **3. 정준 판별분석**
+
+- 판별분석은 $G$개의 집단을 가능한 잘 구별할 수 있는 변수들 $X_1, \ldots, X_p$의 함수를 결정하는 것이 중요하다.
+- 이런 목적에서 가장 간단한 방법은 판별변수 $\boldsymbol{X}=(X_1, \ldots, X_p)^T$의 선형결합 $V=\boldsymbol{b}^T\boldsymbol{X}=b_1X_1+\ldots+b_pX_p$ 형태를 취하는 것이다.
+- 만약 집단내에서 변수 $V$의 값들이 어느 정도 일정하면서 집단간에 $V$의 평균값이 많이 다르면(=집단간 변동이 큼), 집단들은 $V$ 값을 이용해 잘 구별할 수 있다.
+- 판별계수 $\boldsymbol{b}^T$를 결정하는 한 가지 방법은 Fisher에 의해서 제안된 방법으로, 분산분석에서 $F=\frac{\text{집단간 변동}}{\text{집단내 변동}}$ 값이 최대가 되도록하는 값들을 선택하는 것이다.
+    - 이때 구해진 판별계수 $\boldsymbol{b}^T$를 `정준 판별계수`라고 하며, $V=\boldsymbol{b}^T\boldsymbol{X}=b_1X_1+\ldots+b_pX_p$를 `정준 판별함수`라고 한다.
+    - 이 방법을 사용할 때, 집단을 구별하는 여러 개의 선형결합을 찾는 것이 가능한 것으로 밝혀졌다.
+        - 일반적으로 $s=\text{min}(G-1, p)$개의 선형결합식을 찾을 수 있다.
+- R에서 정준 판별분석을 수행하기 위해서는 Package `MASS`에서 제공하는 함수 `lda()`를 이용하면 된다.
+
+--------------------------
+
+## **3-1. 부분집단이 두 개인 경우**
+
+- 가정 : `모공분산행렬의 동일성`
+- 부분집단이 두 개인 경우(즉, $G=2$), Fisher가 제안한 방법은 선형결합식 $V=\boldsymbol{b}^T\boldsymbol{X}=b_1X_1+\ldots+b_pX_p$에 의해 두 개의 집단을 분리하려는 것이다.
+- 이때 변환된 두 부분집단의 $V$의 모평균에 대한 이표본 $t$-검정통계량은 다음과 같이 주어진다.
+$$
+\begin{align*}
+t=\frac{\boldsymbol{b}^T(\bar{\boldsymbol{X}}_1-\bar{\boldsymbol{X}}_2)}{\sqrt{\boldsymbol{b}^T\boldsymbol{S}\boldsymbol{b}(1/n_1+1/n_2)}}
+\end{align*}
+$$
+    - $\bar{\boldsymbol{X}}_1, \bar{\boldsymbol{X}}_2$ : 두 부분집단의 표본평균벡터
+    - $\boldsymbol{S}$ : 합동 표본공분산행렬
+        - $\boldsymbol{S}=\frac{(n_1-1)\boldsymbol{S}_1+(n_2-1)\boldsymbol{S}_2}{n_1+n_2-2}$
+    - $n_1, n_2$ : 두 부분집단의 개체 수
+- Fisher의 판별함수는 변환된 $V$에 대해 두 부분집단의 표본평균간의 표준화된 거리의 제곱이 되는 $t^2$을 최대화하는 선형변환이다.
+    - 판별분석은 집단간의 거리를 최대화하는 변수들의 선형결합식을 찾는 것이며, 변환된 두 부분집단의 $V$의 모평균의 차이가 클수록(=$t^2$이 클수록) 두 집단간의 거리가 커지는 것을 의미하기 때문이다.  
+- $t^2$이 최대일 때 판별계수 $\boldsymbol{b}$는 $c\boldsymbol{S}^{-1}(\bar{\boldsymbol{x}}_1-\bar{\boldsymbol{x}}_2)$이 된다.
+    - $c$는 $\boldsymbol{b}^T\boldsymbol{S}\boldsymbol{b}=1$이 되도록 만드는 척도화 상수이다.
+
+```{r}
+# 정준 판별분석
+pacman::p_load("MASS")
+
+finance.lda <- lda(y ~ x1 + x2 + x3 + x4,           # formula : 반응변수(집단변수) ~ 판별변수
+                   data = finance)                   
+finance.lda
+```
+
+`Result!` 부분집단이 두 개인 경우, 구해진 정준 판별계수는 (1.002, 3.999, 0.845, -1.015)이며, 정준 판별계수를 이용하여 정준 판별함수를 표현하면 다음과 같다.
+$$
+\begin{align*}
+V=1.002(x_1-\bar{x}_1)+3.999(x_2-\bar{x}_2)+0.845(x_3-\bar{x}_3)-1.015(x_4-\bar{x}_4).
+\end{align*}
+$$
+판별점수($V$)가 클수록, 즉, $x_1$(총부채 대비 현금 유출입), $x_2$(총자산 대비 순이익), $x_3$(채무 대비 자산)이 클수록 건전 기업($y=2$)에 속할 확률이 커지고, 판별점수($V$)가 작을수록, 즉, $x_4$(순매출 대비 자산)이 클수록 건전 기업($y=2$)에 속할 확률이 작아짐을 알 수 있다. 
+
+--------------------------------
+
+```{r}
+# 그래프적 표현
+plot(finance.lda)
+```
+
+`Result!` 유도된 판별함수에 의해 계산된 판별점수의 분포를 그래프로 표현한 결과이다. 첫 번째 그래프는 파산 기업($y=1$)에 대한 판별점수의 분포이며, 두 번째 그래프는 건전 기업($y=2$)에 대한 판별점수의 분포이다.  파산 기업($y=1$)에 대한 판별점수, 즉, $V$값은 음수가 나와야 파산 기업($y=1$)으로 분류하며, 이는 0보다 큰 점수에 대해 오분류되었다는 것을 의미한다. 건전 기업($y=2$)에 대한 판별점수, 즉, $V$값은 양수가 나와야 건전 기($y=2$)업으로 분류하며, 이는 0보다 작은 점수에 대해 오분류되었다는 것을 의미한다.
+
+------------------------------------
+
+```{r}
+# 새로운 개체에 대한 집단 예측
+pred.finance <- predict(finance.lda,                # 함수 lda로부터 출력된 객체
+                        finance)                    # 새로운 데이터
+
+# 선형 판별점수, 예측 확률, 예측 집단
+pf <- cbind(finance, pred.finance$x, pred.finance$posterior, pred.finance$class)
+
+# 집단별 판별점수(LD1) 값의 평균
+aggregate(LD1 ~ y,     # 분석 변수 ~ 집단변수
+          data = pf,   # 데이터프레임
+          mean)        # 적용할 통계량
+```
+
+`Result!` 파산 기업($y=1$)으로 예측된 개체들의 판별점수의 평균은 -1.027이며 건전 기업($y=2$)으로 예측된 개체들의 판별점수의 평균은 0.863이다. 즉, 판별점수가 낮을수록 파산 기업($y=1$)으로 예측할 확률이 커지는 반면, 판별점수가 높을수록 건전 기업($y=2$)으로 예측할 확률이 커진다.
+
+--------------------------
+
+## **3-2. 부분집단이 세 개 이상인 경우**
+
+- 가정 : `다변량 정규성 및 모공분산행렬의 동일성`
+- 부분집단이 $G(\ge 3)$개인 부분집단 모평균들의 동일성에 대한 검정통계량은 일원배치 분산분석의 $F$-비로서 다음과 같이 주어진다.
+$$
+\begin{align}
+F=\frac{\boldsymbol{b}^T\boldsymbol{B}\boldsymbol{b}/(G-1)}{\boldsymbol{b}^T\boldsymbol{W}\boldsymbol{b}/(n-G)}.
+\end{align}
+$$
+    - 여기서 $\boldsymbol{B}$와 $\boldsymbol{W}$은 각각 집단간 그리고 집단내의 흩어짐에 관한 정보를 가지고 있다.
+        - $\boldsymbol{B}$가 크다는 것은 집단간 평균 사이의 변동이 크다라는 것이며, 이는 평균들이 멀리 떨어져 있다는 것을 의미한다.
+        - $\boldsymbol{W}$가 작다는 것은 동일한 집단내 변동이 작다라는 것이며, 이는 집단의 평균에 관측값들이 모여있다는 것을 의미한다.
+- $F$-비는 집단내 변동에 비해 집단간 변동이 클수록 값이 커지고, 이는 집단간 멀리 떨어져 있다는 것을 의미한다.
+    - 판별함수는 집단간 거리를 최대로 하는 함수이기 때문에 $F$-비를 최대로 하는 $\boldsymbol{b}$를 찾으면 된다는 것을 의미한다.
+- $F$-비를 최대화하는 $\boldsymbol{b}=\boldsymbol{b}_1$은 $\boldsymbol{W}^{-1}\boldsymbol{B}$의 최대고유값 $\lambda_1$에 대응하는 고유벡터이고 그때의 $F$-비의 값은 $\lambda_1$이 된다.
+- 나아가 $Cov(\boldsymbol{b}^T_1\boldsymbol{X}, \boldsymbol{b}^T_2\boldsymbol{X})=0$, 즉, 독립이라는 제약조건 하에서 $F$-비를 최대화하는 $\boldsymbol{b}=\boldsymbol{b}_2$은 $\boldsymbol{W}^{-1}\boldsymbol{B}$의 두 번째로 큰 고유값 $\lambda_2$에 대응하는 고유벡터이고 그때의 $F$-비의 값은 $\lambda_2$이 된다.
+- 이와 같은 절차는 도출된 판별함수의 수가 $s=\text{min}(G-1, p)$에 도달할 때까지 계속될 수 있다.
+- 구해진 $s$개의 정준 판별계수벡터 $\boldsymbol{b}_k=(b_{k1}, \ldots, b_{kp})^T$에 대응하는 정준 판별함수는 $\boldsymbol{b}^T$와 판별변수벡터 $\boldsymbol{X}$의 선형결합으로 $V_k=\boldsymbol{b}^T_k\boldsymbol{X}=b_{k1}X_{1}+\ldots+b_{kp}X_p,\;\; k=1,\ldots, s$이다.
+
+
+```{r}
+# 데이터 불러오기
+data(iris)
+head(iris)
+
+# 정준 판별분석
+pacman::p_load("MASS")
+
+iris.lda <- lda(Species ~ ., data = iris)
+iris.lda
+```
+
+`Result!` 데이터 "iris"의  "setosa", "versicolor", "virginica"의 비율은 0.33으로 동일하며, "virginica"의 "Petal.Length"는 다른 두 종류보다 평균적으로 더 길다. 또한, "proportion of trace"는 판별함수에 의해 설명되는 집단간 변동의 비율이며 유도된 두 판별함수의 설명력은 각각 99.1%, 0.9%임을 알 수 있다.  출력된 정준 판별계수를 이용하여 두 정준 판별함수를 표현하여 보면 다음과 같다.
+$$
+\begin{align*}
+V_1&=0.829(x_1-\bar{x}_1)+1.534(x_2-\bar{x}_2)-2.201(x_3-\bar{x}_3)-2.810(x_4-\bar{x}_4),\\
+V_2&=0.024(x_1-\bar{x}_1)+2.165(x_2-\bar{x}_2)-0.932(x_3-\bar{x}_3)+2.839(x_4-\bar{x}_4).
+\end{align*}
+$$
+여기서, $x_1, x_2, x_3, x_4$는 각각 "Sepal.Length"(꽃받침조각의 길이), "Sepal.Width"(꽃받침조각의 폭), "Petal.Length"(꽃잎의 길이), "Petal.Width"(꽃잎의 폭)에 해당한다.
+
+-----------------------------
+
+```{r}
+# 예측
+pred <- predict(iris.lda,                            # 함수 lda로부터 출력된 객체
+                iris)                                # 새로운 데이터
+
+# 선형 판별점수, 예측 확률, 예측 집단
+iris.pred <- cbind(iris, pred$x, pred$posterior, pred$class)
+iris.pred
+```
+
+`Caution!` 함수 `predict()`를 통해 유도된 판별함수에 의한 새로운 개체의 정준 판별점수 값, 예측 확률, 예측 집단을 출력할 수 있다.  
+`Result!` 예를 들어, 유도된 판별함수에 의한 첫 번째 객체의 정준 판별점수 (LD1, LD2)는 (8.062, 0.300)이다. 
+
+-----------------------------
+
+```{r}
+# 판별점수에 대한 산점도 1
+plot(iris.lda,                                       # 함수 lda로부터 출력된 객체
+     col = as.integer(iris$Species))                 # 각 집단별로 동일한 색깔 지정
+
+# 판별점수에 대한 산점도 2
+pacman::p_load("ggplot2")
+
+ggplot(iris.pred, aes(LD1, LD2)) +                   # 선형 판별점수, 예측 확률, 예측 집단 데이터 
+  geom_point(aes(color = Species)) +                 # 각 집단별로 동일한 색깔 지정
+  theme_bw()
+```
+
+`Caution!` 함수 `plot()`과 `ggplot()`을 이용해서 두 판별점수 (LD1, LD2)에 대한 산점도를 작성할 수 있다.  
+`Result!` "Species"의 "setosa"는 첫 번째 판별함수에 의한 판별점수 `LD1`이 다른 두 종류와 달리 큰 양수값이다. 게다가, "setosa"는 다른 두 품종과 멀리 분리되어 있으나, "versicolor"와 "virginica"는 가깝게 인접해 있음을 볼 수 있다.
+
+-----------------------------
+
+```{r}
+# 히스토그램
+plot(iris.lda,                                       # 함수 lda로부터 출력된 객체
+     dimen = 1,                                      # 첫 번째 정준 판별점수만을 이용
+     type = "both")                                  # 히스토그램과 분포도 모두 출력
+```
+
+`Result!` 위의 산점도에서 확인한 것처럼 "Species"의 "setosa"는 첫 번째 판별함수에 의한 판별점수 `LD1`이 다른 두 종류와 달리 큰 양수값이며, 두 번째로 "versicolor"의 판별점수 값이 높으며, 마지막으로 "virginica"의 판별점수 값이 가장 낮다.
+
+--------------------------------
+
+```{r}
+pacman::p_load("klaR")
+
+partimat(Species ~ .,
+         data = iris,
+         method = "lda")
+```
+
+--------------------------------
+
+```{r}
+# 오분류표
+pacman::p_load("DescTools")
+
+# 도수분포표
+iris.ctbl <- table(iris$Species,                     # 실제 집단
+                   pred$class)                       # 예측된 집단
+iris.ctbl
+
+Desc(iris.ctbl,                                      # 도수분포표
+     digits = 4)
+```
+
+`Result!` 원래 집단 "setosa"에 속하는 50개의 개체 모두 집단 "setosa"에 제대로 분류되었다. 원래 집단 "versicolor"에 속하는 50개의 개체 중 48개(48/50=96%)는 제대로 분류되었으나 2개(2/50=4%)는 잘못 분류되었다. 또한, 원래 집단 "virginica"에 속하는 50개의 개체 중 49개(49/50=98)는 제대로 분류되었으나 1개(1/50=2)는 잘못 분류되었다. 유도된 선형 판별함수에 대한 오류율은 (2+1)/150=2%이며, 정확도는 (50+48+49)/150=98%이다.
+
+--------------------------------
+
+# **4. 예측**
+
+- 특별한 가정 하에서 판별함수 또는 확률밀도함수를 구하고 나면, 어떤 분류기준에 의해 새로운 개체들을 분류할 수 있다.
+- R에서 유도된 판별함수에 의해 새로운 개체의 집단을 예측하기 위해서는 함수 `predict()`를 이용할 수 있다.
+- 함수 `predict()`는 `사후확률이 가장 큰 집단`으로 새로운 개체를 분류한다.
+
+```{r}
+# 데이터 불러오기
+data(iris)
+head(iris)
+
+# 정준 판별분석
+pacman::p_load("MASS")
+
+iris.lda <- lda(Species ~ ., data = iris)
+
+# 예측 
+predict(iris.lda,                            # 함수 lda로부터 출력된 객체
+        iris)                                # 새로운 데이터
+```
+
+
+--------------------------------
+
+# **5. 오분류율 계산**
+
+- 판별함수의 능력을 판단하기 위해 판별함수의 오분류율과 정확한 분류율을 이용할 수 있다.
+- 오분류율을 계산하는 방법으로는 다음과 같다.
+    1. 재대입에 의한 오분류율 계산
+        - 판별함수를 유도하는 데 사용했던 데이터를 이용하여 오분류율을 계산한다.
+    2. 표본분할에 의한 오분류율 계산
+        - 데이터를 판별함수를 유도하는 데 사용하는 데이터와 오분류율을 계산하는 데이터 두 가지로 분할한다.
+    3. 교차타당성에의한 오분류율 계산
+        - 한 개만의 개체를 제외한 나머지 개체로 판별함수를 유도하고 제외한 한 개의 개체에 대해 오분류율을 계산하며, 모든 개체에 대해 이러한 과정을 적용한다.
+- R에서 오분류율을 계산하기 적용할 수 있는 함수는 대표적으로 다음과 같다.
+    1. 함수 `table()`
+    2. Package `DescTools`에서 제공하는 함수 `Desc()`
+    3. Package `caret`에서 제공하는 `confusionMatrix()`
+
+```{r}
+# 데이터 불러오기
+data(iris)
+head(iris)
+
+# 1. 재대입에 의한 오분류율 계산 
+## 정준 판별분석
+pacman::p_load("MASS")
+
+iris.lda <- lda(Species ~ ., data = iris)
+
+## 예측
+pred <- predict(iris.lda,                            # 함수 lda로부터 출력된 객체
+                iris)                                # 판별함수를 유도하는 데 사용했던 데이터
+## 오분류율 계산
+## 함수 table()
+iris.ctbl <- table(iris$Species,                     # 실제 집단
+                   pred$class)                       # 예측된 집단
+iris.ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(iris.ctbl,                                      # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측된 집단
+                iris$Species)                        # 실제 집단
+```
+
+----------------------------------
+
+```{r}
+# 2. 표본분할에 의한 오분류율 계산
+## 표본 분할
+pacman::p_load("caret")
+
+set.seed(200)                                        # Seed 고정
+ind <- createDataPartition(iris$Species,             # 반응변수
+                           p = .7,                   # 판별함수를 유도하는 데 사용되는 데이터 비율
+                           list = F)                 # 출력 결과를 List로 반환할 것인지 여부  
+
+trd <- iris[ind,]                                    # 판별함수를 유도하는 데 사용되는 데이터
+ted <- iris[-ind,]                                   # 오분류율 계산을 위해 사용되는 데이터 
+```
+
+`Caution!` Package `caret`에서 제공하는 함수 `createDataPartition()`은 반응변수의 집단별 비율을 원본 데이터와 같게 유지하면서 판별함수를 유도하는 데 사용할 데이터의 인덱스를 추출한다. 
+
+```{r}
+## 정준 판별분석
+pacman::p_load("MASS")
+
+iris.lda <- lda(Species ~ ., data = trd)
+
+## 예측
+pred <- predict(iris.lda,                            # 함수 lda로부터 출력된 객체
+                ted)                                 # 새로운 데이터
+## 오분류율 계산
+## 함수 table()
+iris.ctbl <- table(ted$Species,                      # 실제 집단
+                   pred$class)                       # 예측된 집단
+iris.ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(iris.ctbl,                                      # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(pred$class,                          # 예측된 집단
+                ted$Species)                         # 실제 집단
+```
+
+----------------------------------
+
+```{r}
+# 3. 교차타당성에 의한 오분류율 계산
+## 정준 판별분석
+pacman::p_load("MASS")
+
+iris.lda <- lda(Species ~ ., data = iris,
+                CV = TRUE)
+```
+
+`Caution!` 함수 `lda()`의 옵션 `CV = TRUE`을 지정하면 교차타당성에 의한 오분류율을 계산할 수 있다.
+
+```{r}
+## 오분류율 계산
+## 함수 table()
+iris.ctbl <- table(iris$Species,                      # 실제 집단
+                   iris.lda$class)                    # 예측된 집단
+iris.ctbl
+
+## 함수 Desc()
+pacman::p_load("DescTools")
+
+Desc(iris.ctbl,                                      # 도수분포표
+     digits = 4)
+
+## 함수 confusionMatrix()
+pacman::p_load("caret")
+
+confusionMatrix(iris.lda$class,                       # 예측된 집단
+                iris$Species)                         # 실제 집단
+```

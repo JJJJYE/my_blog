@@ -1,0 +1,344 @@
+---
+title: "LASSO Regression using Package caret"
+description: |
+  Description for LASSO Regression using Package caret
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-08-13
+categories: Data Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+> LASSO Regression의 장점
+ 
+- 규제항을 통해 회귀계수를 "0"으로 추정하기 때문에 변수 선택이 가능하다.
+
+
+</br>
+
+> LASSO Regression의 단점
+
+- 예측 변수의 개수가 표본의 크기보다 큰 경우, 볼록 최적화 문제의 특성 때문에 표본의 크기보다 많은 예측 변수를 선택할 수 없다.
+- 예측 변수 사이에 어떤 그룹 구조(쌍별 상관 관계가 매우 높은)가 있을 때, 그룹에서 하나의 예측 변수만 선택한다.
+- 예측 변수의 개수가 표본의 크기보다 큰 상황에서 예측 변수들이 높은 상관관계를 가지고 있을 때, `Ridge Regression`보다 예측 성능이 낮다.
+
+</br>
+ 
+> 실습 자료 : 유니버셜 은행의 고객 2,500명에 대한 자료(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이며, 총 13개의 변수를 포함하고 있다. 이 자료에서 **Target**은 `Personal Loan`이다.
+
+<center>![](./image/그림1.png)</center>
+
+<br />
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+<br />
+
+----------
+
+> # **Contents**
+
+
+- [데이터 불러오기][**1. 데이터 불러오기**]
+- [데이터 전처리][**2. 데이터 전처리**]
+- [데이터 탐색][**3. 데이터 탐색**]
+- [데이터 분할][**4. 데이터 분할**]
+- [모형 훈련][**5. 모형 훈련**]
+- [모형 평가][**6. 모형 평가**] 
+ 
+----------
+
+# **1. 데이터 불러오기**
+
+
+```{r, eval=F}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr",
+               "ggplot2", "GGally",
+               "caret",
+               "doParallel", "parallel")                                # For 병렬 처리
+
+registerDoParallel(cores=detectCores())                                 # 사용할 Core 개수 지정     
+
+UB <- fread("../Universal Bank_Main.csv")                               # 데이터 불러오기
+
+UB %>%
+  as_tibble
+```
+
+```{r, echo=F}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr",
+               "ggplot2", "GGally",
+               "caret",
+               "doParallel", "parallel")                                # For 병렬 처리
+
+registerDoParallel(cores=detectCores())                                 # 사용할 Core 개수 지정 
+
+UB <- fread(paste(getwd(), "Universal Bank_Main.csv", sep = "/"))       # 데이터 불러오기
+
+UB %>%
+  as_tibble
+```
+
+----------
+
+# **2. 데이터 전처리**
+
+```{r}
+UB %<>%
+  data.frame() %>%                                                      # Data Frame 형태로 변환 
+  mutate(Personal.Loan = ifelse(Personal.Loan == 1, "yes", "no")) %>%   # Target을 문자형 변수로 변환
+  select(-1)                                                            # ID 변수 제거
+
+# Convert to Factor
+fac.col <- c("Family", "Education", "Securities.Account", 
+             "CD.Account", "Online", "CreditCard",
+             # Target
+             "Personal.Loan")
+
+UB <- UB %>% 
+  mutate_at(fac.col, as.factor)                                         # 범주형으로 변환
+
+glimpse(UB)                                                             # 데이터 구조 확인
+```
+
+----------
+
+# **3. 데이터 탐색**
+
+```{r}
+ggpairs(UB,                                             
+        columns = c("Age", "Experience", "Income",        # 수치형 예측 변수
+                    "ZIP.Code", "CCAvg", "Mortgage"),                            
+        aes(colour = Personal.Loan)) +                    # Target의 범주에 따라 색깔을 다르게 표현
+  theme_bw()  
+
+ggpairs(UB,                                          
+        columns = c("Age", "Experience", "Income",        # 수치형 예측 변수
+                    "ZIP.Code", "CCAvg", "Mortgage"), 
+        aes(colour = Personal.Loan)) +                    # Target의 범주에 따라 색깔을 다르게 표현
+  scale_color_brewer(palette="Purples") +                 # 특정 색깔 지정
+  scale_fill_brewer(palette="Purples") +                  # 특정 색깔 지정
+  theme_bw()
+
+ggpairs(UB,                                        
+        columns = c("Age", "Income",                      # 수치형 예측 변수
+                    "Family", "Education"),               # 범주형 예측 변수
+        aes(colour = Personal.Loan, alpha = 0.8)) +       # Target의 범주에 따라 색깔을 다르게 표현
+  scale_colour_manual(values = c("purple","cyan4")) +     # 특정 색깔 지정
+  scale_fill_manual(values = c("purple","cyan4")) +       # 특정 색깔 지정
+  theme_bw()
+```
+
+----------
+
+# **4. 데이터 분할**
+
+```{r}
+# Partition (Training Dataset : Test Dataset = 7:3)
+y      <- UB$Personal.Loan                            # Target
+ 
+set.seed(200)
+ind    <- createDataPartition(y, p = 0.7, list = T)   # Index를 이용하여 7:3으로 분할
+UB.trd <- UB[ind$Resample1,]                          # Training Dataset
+UB.ted <- UB[-ind$Resample1,]                         # Test Dataset
+```
+
+----------
+
+# **5. 모형 훈련**
+
+Package `"caret"`은 통합 API를 통해 R로 기계 학습을 실행할 수 있는 매우 실용적인 방법을 제공한다. Package `"caret"`를 통해 `LASSO Regression`을 수행하기 위해 옵션 `method`에 다양한 방법(Ex: `"lasso"`, `"blasso"` 등)을 입력할 수 있지만, 대부분 회귀 문제에 대해서만 분석이 가능하다. 분류와 회귀 문제 모두 가능한 `"glmnet"`을 이용하려면 옵션 `tuneGrid = expand.grid()`을 통해 탐색하고자 하는 초모수 `lambda`의 범위를 직접 지정해줘야 한다. 
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 5,                 # 5-Fold Cross Validation (5-Fold CV)
+                           allowParallel = TRUE)                      # 병렬 처리
+
+
+set.seed(200)                                                         # For CV
+lasso.fit <- train(Personal.Loan ~ ., data = UB.trd, 
+                   trControl = fitControl ,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1,                  # For LASSO Regression
+                                          lambda = seq(0, 1, 0.001)), # lambda의 탐색 범위
+                   preProc = c("center", "scale"))                    # Standardization for 예측 변수
+
+lasso.fit
+plot(lasso.fit)                                                       # Plot
+
+lasso.fit$bestTune                                                    # lambda의 최적값
+```
+
+`Result!` `lambda` = 0.001일 때 정확도가 가장 높은 것을 알 수 있으며, `lambda` = 0.001를 가지는 모형을 최적의 훈련된 모형으로 선택한다.
+
+```{r}
+round(coef(lasso.fit$finalModel, lasso.fit$bestTune$lambda), 3)       # lambda의 최적값에 대한 회귀계수 추정치
+```
+
+`Result!` 데이터 "UB.trd"의 Target "Personal.Loan"은 "no"와 "yes" 2개의 클래스를 가지며, "Factor" 변환하면 알파벳순으로 수준을 부여하기 때문에 "yes"가 두 번째 클래스가 된다. 즉, "yes"에 속할 확률(= 개인 대출 제의를 수락할 확률)을 $p$라고 할 때, 추정된 회귀계수를 이용하여 다음과 같은 모형식을 얻을 수 있다.
+$$
+\begin{align*}
+\log{\frac{p}{1-p}} = &-4.550 +0.092 Z_{\text{Age}} + 2.449 Z_{\text{Income}} \\
+                      &+0.054 Z_{\text{ZIP.Code}} -0.129 Z_{\text{Family2}} + 0.716 Z_{\text{Family3}} +  0.666 Z_{\text{Family4}}   \\
+                      &+ 0.354 Z_{\text{CCAvg}} + 1.373 Z_{\text{Education2}} + 1.420 Z_{\text{Education3}} + 0.042 Z_{\text{Mortgage}} \\
+                      &-0.347 Z_{\text{Securities.Account1}} + 0.963 Z_{\text{CD.Account1}} -0.132 Z_{\text{Online1}} -0.504 Z_{\text{CreditCard1}}
+\end{align*}
+$$
+여기서, $Z_{\text{예측 변수}}$는 표준화한 예측 변수를 의미한다.  
+범주형 예측 변수("Family", "Education", "Securities.Account", "CD.Account", "Online", "CreditCard")는 더미 변환이 수행되었는데, 예를 들어, `Family2`는 가족 수가 2명인 경우 "1"값을 가지고 2명이 아니면 "0"값을 가진다.
+
+
+---------------
+
+# **6. 모형 평가**
+
+`Caution!` 모형 평가를 위해 `Test Dataset`에 대한 `예측 class/확률` 이 필요하며, 함수 `predict()`를 이용하여 생성한다. 
+```{r}
+# 예측 class 생성
+test.lasso.class <- predict(lasso.fit, 
+                            newdata = UB.ted[,-9])      # Test Dataset including Only 예측 변수  
+
+test.lasso.class %>%                                      
+  as_tibble
+```
+
+<br />
+
+## **6-1. ConfusionMatrix**
+
+```{r}
+CM   <- caret::confusionMatrix(test.lasso.class, UB.ted$Personal.Loan, 
+                               positive = "yes")        # confusionMatrix(예측 class, 실제 class, positive = "관심 class")
+CM
+```
+
+<br />
+
+## **6-2. ROC 곡선**
+
+```{r}
+# 예측 확률 생성
+test.lasso.prob <- predict(lasso.fit, 
+                           newdata = UB.ted[,-9],      # Test Dataset including Only 예측 변수 
+                           type = "prob")              # 예측 확률 생성
+
+
+test.lasso.prob %>%                                                         
+  as_tibble
+```
+
+```{r}
+test.lasso.prob <- test.lasso.prob[,2]                 # "Personal.Loan = yes"에 대한 예측 확률
+
+ac  <- UB.ted$Personal.Loan                            # Test Dataset의 실제 class 
+pp  <- as.numeric(test.lasso.prob)                     # 예측 확률을 수치형으로 변환
+```
+
+### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+lasso.roc  <- roc(ac, pp, plot = T, col = "gray")      # roc(실제 class, 예측 확률)
+auc        <- round(auc(lasso.roc), 3)
+legend("bottomright", legend = auc, bty = "n")
+
+```
+
+`Caution!` Package `"pROC"`를 통해 출력한 ROC 곡선은 다양한 함수를 이용해서 그래프를 수정할 수 있다.
+
+```{r}
+# 함수 plot.roc() 이용
+plot.roc(lasso.roc,   
+         col="gray",                                   # Line Color
+         print.auc = TRUE,                             # AUC 출력 여부
+         print.auc.col = "red",                        # AUC 글씨 색깔
+         print.thres = TRUE,                           # Cutoff Value 출력 여부
+         print.thres.pch = 19,                         # Cutoff Value를 표시하는 도형 모양
+         print.thres.col = "red",                      # Cutoff Value를 표시하는 도형의 색깔
+         auc.polygon = TRUE,                           # 곡선 아래 면적에 대한 여부
+         auc.polygon.col = "gray90")                   # 곡선 아래 면적의 색깔
+```
+
+
+```{r}
+# 함수 ggroc() 이용
+ggroc(lasso.roc) +
+annotate(geom = "text", x = 0.9, y = 1.0,
+label = paste("AUC = ", auc),
+size = 5,
+color="red") +
+theme_bw()
+```
+
+
+
+### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("Epi")       
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot = "ROC")                              # ROC(예측 확률, 실제 class)  
+
+```
+
+### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")
+
+lasso.pred <- prediction(pp, ac)                       # prediction(예측 확률, 실제 class) 
+
+lasso.perf <- performance(lasso.pred, "tpr", "fpr")    # performance(, "민감도", "1-특이도")                      
+plot(lasso.perf, col = "gray")                         # ROC Curve
+
+perf.auc   <- performance(lasso.pred, "auc")           # AUC
+auc        <- attributes(perf.auc)$y.values
+legend("bottomright", legend = auc, bty = "n")
+```
+
+<br />
+
+## **6-3. 향상 차트**
+
+### **1) Package "ROCR"**
+
+```{r}
+lasso.perf <- performance(lasso.pred, "lift", "rpp")   # Lift Chart                      
+plot(lasso.perf, main = "lift curve",
+     colorize = T,                                     # Coloring according to cutoff 
+     lwd = 2) 
+
+```
+
+
+```{r, eval=F, echo=F, include=FALSE}
+#### **2) Package "lift"**
+
+pacman::p_load("lift")
+
+plotLift(test.lasso.prob, UB.ted$Personal.Loan, cumulative = T, n.buckets = 24) # plotLift(6-2에서 생성한 예측 확률, 실제 class)
+TopDecileLift(test.lasso.prob, UB.ted$Personal.Loan)		                        # Top 10%의 향상도 출력
+
+```

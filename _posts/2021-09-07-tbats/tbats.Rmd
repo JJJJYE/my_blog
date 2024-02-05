@@ -1,0 +1,141 @@
+---
+title: "TBATS"
+description: |
+  TBATS for Time Series Data
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 09-07-2021
+preview: preview.PNG
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- Data 출처 : [Data Mining for Business Analytics](https://www.dataminingbook.com/book/r-edition)에서 사용한 미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수
+
+-----------
+
+# **Introduction**
+
+- TBATS 모형
+    - T : Trigonometric seasonality
+        - 퓨리에 항(Fourier Series) 기반
+    - B : Box-Cox transformation
+    - A : ARIMA errors
+    - T : Trend (possibly damped) 
+    - S : Seasonal components
+
+-------------------
+
+- TBATS 모형은 `광범위한 계절 패턴 변동`과 관련된 문제를 극복하고 `상관성이 있는 오차`를 처리하기 위해 `지수 평활(Exponential Smoothing)`을 사용한 수정된 상태공간 모형으로 [De Livera et al. (2011)](https://robjhyndman.com/papers/ComplexSeasonality.pdf)이 제안하였다.
+- 게다가 비선형성(Nonlinearity)에 관련된 문제를 해결하기 위해 Box-Cox 변환도 고려되었다.
+- TBATS 모형은 `복잡한 계절성`을 가진 시계열 데이터를 분석하는 데 유용하다.
+    - 복잡한 계절성의 예 : 다중 계절성(Multiple Seasonal Pattern), Non-integer Seasonality, Non-nested Seasonality and Large-period Seasonality 등
+- TBATS 모형은 계절성이 시간에 따라 느리게 변할 수 있다는 점에서 Dynamic Harmonic Regression과 다르다.
+    - 즉, 시간이 지남에 따라 계절성이 천천히 변화할 수 있다는 장점이 있다.
+- 하지만, 주기가 긴 시계열을 추정하는데 느릴 수 있다는 단점이 있다.
+
+-------------------
+
+# **Application**
+
+- Ridership on Amtrak Trains(미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수) 예제를 이용하여 TBATS 모형이 실제 데이터에 어떻게 적용되는지 설명한다.
+
+----------
+
+## **Data 불러오기**
+
+```{r}
+pacman::p_load("dplyr", "forecast", "parallel")
+
+# In Mac
+# guess_encoding("Amtrak.csv")
+# Amtrak.data <- read.csv("Amtrak.csv", fileEncoding="EUC-KR")
+
+Amtrak.data  <- read.csv("C:/Users/User/Desktop/Amtrak.csv")
+ridership.ts <- ts(Amtrak.data$Ridership, start=c(1991,1), end=c(2004,3), freq=12)
+```
+
+----------
+
+## **Data 분할**
+
+
+```{r}
+train.ts  <- window(ridership.ts,start=c(1991,1), end=c(2001,3))   # Training Data
+test.ts   <- window(ridership.ts,start=c(2001,4))                  # Test Data
+n.test    <- length(test.ts)
+
+```
+
+----------
+
+## **모형 적합**
+
+- `forecast` package에 있는 `tbats()`를 이용하여 모형을 적합시킬 수 있다. 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/forecast/versions/8.15/topics/tbats)를 참조한다.
+
+
+```{r, eval=FALSE}
+tbats(
+  y,
+  use.box.cox = NULL,
+  use.trend = NULL,
+  use.damped.trend = NULL,
+  seasonal.periods = NULL,
+  use.arma.errors = TRUE,
+  use.parallel = length(y) > 1000,
+  num.cores = 2,
+  bc.lower = 0,
+  bc.upper = 1,
+  biasadj = FALSE,
+  model = NULL,
+  ...
+)
+```
+
+- y : 시계열 데이터
+- use.box.cox : Box-Cox 변환 사용 여부로 NULL이면 둘 다 시도되고 AIC로 최적 적합을 선택
+- use.trend : 추세 포함 여부로 NULL이면 둘 다 시도되고 AIC로 최적 적합을 선택
+- use.damped.trend : 추세에 damping parameter 포함 여부로 NULL이면 둘 다 시도되고 AIC로 최적 적합을 선택 
+- seasonal.periods : y가 수치형일 경우, 명시되는 계절 기간
+- use.arma.errors : ARIMA 오차항 사용 여부
+- use.parallel : 병렬 처리 사용 여부
+- num.cores : 코어 수
+- bc.lower : Box-Cox 변환에 대한 최소값
+- bc.upper : Box-Cox 변환에 대한 최대값
+- biasadj : Box-Cox 변환에 수정된 역변환 평균을 사용 여부로 TRUE인 경우 점 예측값과 적합치는 평균 예측값,그렇지 않으면 예측 밀도의 중위수로 간주
+
+----------
+
+```{r}
+cl <- parallel::makeCluster(detectCores(), setup_timeout = 0.5)
+TBATS.fit <- train.ts %>%
+  tbats(use.box.cox = FALSE,
+        use.trend = TRUE,
+        use.damped.trend = TRUE,
+        use.parallel = TRUE,
+        num.cores = cl)
+
+summary(TBATS.fit)
+
+```
+
+----------
+
+## **예측**
+
+```{r}
+TBATS.forecast <- forecast(TBATS.fit, h=n.test)
+TBATS.forecast$mean
+
+
+plot(TBATS.forecast)
+accuracy(c(TBATS.forecast$mean), test.ts)
+```
+

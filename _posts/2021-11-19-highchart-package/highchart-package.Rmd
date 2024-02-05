@@ -1,0 +1,233 @@
+---
+title: "Highchart Package"
+description: |
+    Various Interactive Plots using Highchart Package
+author:
+  - name: Yeongeun Jeon
+date: 11-19-2021
+preview: preview.PNG
+categories: Data Visualization
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+- 참고 : [Data, Code and Visualization](https://jkunst.com/blog/posts/2019-02-04-using-tooltips-in-unexpected-ways/)    
+         [hc_opts](https://api.highcharts.com/highcharts/yAxis)
+         
+         
+# **주식 불러오기**
+
+```{r}
+pacman::p_load("quantmod", 
+               "dplyr", "lubridate", "tidyverse",
+                "highcharter")
+
+
+# 카카오
+kakao <- getSymbols("035720.KS", auto.assign = FALSE,
+                    # src='yahoo',
+                    from = "2018-01-01", to = today())
+
+colnames(kakao) <- c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+kakao <- cbind(Date = index(kakao), data.frame(kakao))
+
+# 삼성
+samsung <- getSymbols("005930.KS", auto.assign = FALSE,
+                    from = "2018-01-01", to = today())
+
+colnames(samsung) <- c("Open", "High", "Low", "Close", "Volume", "Adjusted")
+samsung <- cbind(Date = index(samsung), data.frame(samsung))
+```
+
+
+---------
+
+# **Pie and Line Plots**
+
+
+```{r}
+
+df <- rbind( cbind(kakao, "name"= "kakao"), cbind(samsung, "name" = "samsung")) %>%
+  filter(Date >= today()-months(1)) 
+
+df$d <- rep(1:(dim(df)[1]/2), 2)
+
+donut <- df %>%
+  group_by(name) %>%
+  dplyr::summarise(mean.vol = round(mean(Volume), 3))
+
+# Version 1
+donut2 <- df %>%
+  dplyr::select(name, d, Close) %>%
+  nest(-name) %>%
+  dplyr::mutate(
+    data = map(data, mutate_mapping, hcaes(x = d, y = Close), drop = TRUE),  # x가 수치만 가능
+    data = map(data, list_parse)
+  ) %>%
+  dplyr::rename(ttdata = data) %>%
+  left_join(donut)
+
+hc <- hchart(
+  donut2,
+  "pie",
+  hcaes(name = name, y = mean.vol),
+  innerSize = 350   # 원 크기
+)
+
+hc  %>%
+  hc_tooltip(
+    useHTML = TRUE,
+    headerFormat = "<b>{point.key}</b>",
+    pointFormatter = tooltip_chart(
+      accesor = "ttdata",
+      hc_opts = list(
+        xAxis = list(categories = df$Date, type = "category")
+      ),
+      height = 250,
+      width = 300
+    ),
+    positioner = JS(
+      "function () {
+
+            /* one of the most important parts! */
+            xp =  this.chart.chartWidth/2 - this.label.width/2
+            yp =  this.chart.chartHeight/2 - this.label.height/2
+
+            return { x: xp, y: yp };
+
+          }"),
+    shadow = FALSE,
+    borderWidth = 0,
+    backgroundColor = "transparent",
+    hideDelay = 1000
+  ) %>%
+  hc_title(text = "Average Volume and Close For 1 month", margin = 0) %>% 
+  hc_add_theme(
+    hc_theme(
+      # colors = c('#658D1B', '84BD00', 'red'),
+      chart = list(
+        backgroundColor = "white"    
+      )))
+```
+
+-----------
+
+# **Pie and Bar Plots**
+
+```{r}
+donut2 <- df %>%
+  dplyr::select(name, d, Volume) %>%
+  nest(-name) %>%
+  dplyr::mutate(
+    data = map(data, mutate_mapping, hcaes(x = d, y = Volume), drop = TRUE),  # x가 수치만 가능
+    data = map(data, list_parse)
+  ) %>%
+  dplyr::rename(ttdata = data) %>%
+  left_join(donut)
+
+hc <- hchart(
+  donut2,
+  "pie",
+  hcaes(name = name, y = mean.vol),
+  innerSize = 350   # 원 크기
+)
+
+hc  %>%
+  hc_tooltip(
+    useHTML = TRUE,
+    headerFormat = "<b>{point.key}</b>",
+    pointFormatter = tooltip_chart(
+      accesor = "ttdata",
+      hc_opts = list(
+        chart = list(type = "bar"),
+        xAxis = list(categories = df$Date, type = "category")
+      ),
+      height = 250,
+      width = 300
+    ),
+    positioner = JS(
+      "function () {
+
+            /* one of the most important parts! */
+            xp =  this.chart.chartWidth/2 - this.label.width/2
+            yp =  this.chart.chartHeight/2 - this.label.height/2
+
+            return { x: xp, y: yp };
+
+          }"),
+    shadow = FALSE,
+    borderWidth = 0,
+    backgroundColor = "transparent",
+    hideDelay = 1000
+  ) %>%
+  hc_title(text = paste0("Average Volume For 1 month"), margin = 0) %>% 
+  hc_add_theme(
+    hc_theme(
+      # colors = c('#658D1B', '84BD00', 'red'),
+      chart = list(
+        backgroundColor = "white"    
+      )))
+```
+
+------------
+
+# **Treemap and Line Plots**
+
+
+```{r}
+donut2 <- df %>%
+  dplyr::select(name, d, Close) %>%
+  nest(-name) %>%
+  dplyr::mutate(
+    data = map(data, mutate_mapping, hcaes(x = d, y = Close), drop = TRUE),  # x가 수치만 가능
+    data = map(data, list_parse)
+  ) %>%
+  dplyr::rename(ttdata = data) %>%
+  left_join(donut)
+
+
+hc <- hchart(
+  donut2,
+  "treemap",
+  hcaes(name = name, value = mean.vol, color = mean.vol)
+)
+
+hc  %>%
+  hc_tooltip(
+    useHTML = TRUE,
+    headerFormat = "<b>{point.key}</b>",
+    pointFormatter = tooltip_chart(
+      accesor = "ttdata",
+      hc_opts = list(
+        chart = list(backgroundColor = "#FFFFFF"),
+        xAxis = list(categories = df$Date, type = "category")
+      ),
+      height = 250,
+      width = 300
+    ),
+    positioner = JS(
+      "function () {
+
+            /* one of the most important parts! */
+            xp =  this.chart.chartWidth/2 - this.label.width/2
+            yp =  this.chart.chartHeight/2 - this.label.height/2
+
+            return { x: xp, y: yp };
+
+          }"),
+    shadow = FALSE,
+    borderWidth = 0,
+    backgroundColor = "transparent",
+    hideDelay = 1000
+  ) %>%
+  hc_title(text = "Average Volume and Close For 1 month", margin = 0) 
+
+```
+

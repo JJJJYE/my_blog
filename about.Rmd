@@ -1,0 +1,58 @@
+---
+title: "About this blog"
+---
+
+# Yeongeun Jeon
+
+<center>
+  ![](images/그림1.jpg){width=50%}
+</center>
+
+Welcome to my blog! This is the personal blog of Yeongeun Jeon, coming to you from Korea. 
+This is where I'm going to record what I'm studying, especially the analyses using R. 
+
+To give you a brief introduction of me,
+
+- B.S. Statistics, Yeungnam University, Korea, 2018.02
+- Ph.D student from Yeungnam University, Korea.
+- Interests :  Machine Learning/Deep Learning, Time series, Spatial statistics etc.
+
+## Project
+
+- [Visualization Ver. 1](https://leehoo1928.shinyapps.io/ggplot_Ver1/)
+- [Visualization Ver. 2](https://leehoo1928.shinyapps.io/ggplot_Ver2/)
+- [Machine Learning (Binary Classification)](https://jjjjye.shinyapps.io/MachineLearning_Ver2/)
+- [Machine Learning (Multiclass Classification)](https://jjjjye.shinyapps.io/MachineLearning_Multinomial/)
+- [Live Stocks Chart & Analysis Dashboard](https://jjjjye.shinyapps.io/Stock_Analysis/)
+
+## Paper
+
+- [Estimation for a half-triangular distribution based on unified hybrid censored sample (2018)](http://www.kdiss.org/journal/view.html?uid=2446&page=&sort=&scale=10&all_k=&s_t=&s_a=Young+Eun+Jeon&s_k=&s_v=&s_n=&spage=&pn=search&year=&vmd=Full)
+
+- [Estimation of the exponentiated half-logistic distribution based on multiply Type-I hybrid censoring (2019)](http://www.csam.or.kr/journal/view.html?doi=10.29220/CSAM.2020.27.1.047)
+
+- ARIMA모형과 DLM을 이용한 테러 발생 건수 예측 (2020), Korean terrorism studies Review, 13, 102-114.
+
+- [Estimation for the half-logistic distribution based on multiply Type-II hybrid censoring (2020)](https://www.sciencedirect.com/science/article/abs/pii/S037843712030220X)
+
+- [Bayesian estimation for the exponential distribution based on generalized multiply Type-II hybrid censoring (2020)](http://www.csam.or.kr/journal/view.html?doi=10.29220/CSAM.2020.27.4.413)
+
+- [New approach for a Weibull distribution under the progressive Type-II censoring scheme (2020)](https://www.mdpi.com/2227-7390/8/10/1713)
+
+- [Estimation of the Rayleigh Distribution under Unified Hybrid Censoring (2021)](https://ajs.or.at/index.php/ajs/article/view/990)
+
+- [Spatio-temporal modeling to reduce women's fear of crime (2022)](http://www.kdiss.org/journal/view.html?uid=2789&&vmd=Full)
+
+- [Hybrid predictive modeling for charging demand prediction of electric vehicles (2022)](https://www.mdpi.com/2071-1050/14/9/5426)
+
+- [Spatio-temporal analysis with risk factors for five major violent crimes (2022)](http://www.koreascience.or.kr/article/JAKO202231461117552.page)
+
+- [Maximum product of spacings under a generalized Type-II progressive hybrid censoring scheme (2022)](http://www.csam.or.kr/journal/view.html?uid=2017&&vmd=Full)
+
+- [Predictability model of the sea ice extent based on a machine learning technique (2023)](http://www.kdiss.org/journal/view.html?uid=2906&page=&sort=&scale=10&all_k=&s_t=&s_a=Suk-Bok+Kang&s_k=&s_v=&s_n=&spage=&pn=search&year=&vmd=Full)
+
+- [Novel estimation based on a minimum distance under the progressive Type-II censoring scheme (2023)](http://www.csam.or.kr/journal/view.html?uid=2059&sort=&scale=&key=year&keyword=&s_v=30&s_n=4&pn=vol&year=2023&vmd=Full)
+
+- [Enhancing the predictive performance of non-stationary time series data through various transformations (2024)](http://www.kdiss.org/journal/view.html?uid=2970&&vmd=Full)
+
+- [Pivotal-based inference for a Pareto distribution under the adaptive progressive Type-II censoring scheme (2024)](https://www.aimspress.com/article/doi/10.3934/math.2024295)

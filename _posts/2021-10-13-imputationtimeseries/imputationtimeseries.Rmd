@@ -1,0 +1,248 @@
+---
+title: "Imputation for Time Series"
+description: |
+  Imputation using Kalman Smoothing for Time Series Data
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 10-13-2020
+preview: preview.PNG
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+- Data 출처 : [Data Mining for Business Analytics](https://www.dataminingbook.com/book/r-edition)에서 사용한 미국 철도 회사 “Amtrak”에서 수집한 1991년 1월~2004년 3월까지 매달 환승 고객 수
+
+-----------------  
+
+
+# **Structural Time Series Model**
+
+
+$$
+\begin{aligned}
+Y_{t}&=Z^{T}_{t}\alpha_{t}+\epsilon_{t},~~~~~~~\epsilon_{t}\sim N_{m}(0,H_{t}), \\
+\alpha_{t+1}&=T_{t}\alpha_{t}+R_{t}\eta_{t},~~~\eta_{t}\sim N_{q}(0,Q_{t}),\\
+\alpha_{1} &\sim N_{p} (\mu_{1}, P_{1})
+\end{aligned}
+$$
+
+
+- 첫번째는 관측방정식, 두번째는 상태방정식이다.
+   - $Y_{t}$ : 시점 $t$에서 관측값
+   - $\alpha_{t}$ : 시점 $t$에서 관측할 수 없는 상태 (시계열에서 추세, 계절성 등이 상태가 될 수 있음)
+      - 직접 관찰할 수 없지만 시간이 지남에 따라 어떻게 변화하는지 알고 있다고 가정하는 것이 합리적
+      - 시간이 지남에 따라 어떻게 변화하는지 정의
+   - $Z_{t}$, $T_{t}$, $R_{t}$ : 0과 1을 포함하여 알고 있는 값과 미지의 모수를 포함하는 행렬
+      - $Z_{t}$ : $p\times m$ 결과 행렬 (Output Matirx)
+      - $T_{t}$ : $p\times p$ 전이 행렬 (Transition Matrix)
+      - $R_{t}$ : $p\times q$ 제어 행렬 (Control Matrix)
+   - $\epsilon_{t}$, $\eta_{t}$ : 오차로써, 연속적으로 상관관계가 없으며 또한 모든 기간 동안 서로 상관관계가 없는 것으로 가정한다.
+      - $\epsilon_{t}$ : $m\times m$ 분산공분산행렬(Variance-covariance Matrix) $H_{t}$을 가진 $m\times 1$ 벡터
+      - $\eta_{t}$ : $q\times q$ 상태확산행렬(State Diffusion Matrix) $Q_{t}$을 가진 $q \times 1$ 벡터 ($q\le d$)
+
+- 상태 $\alpha_{t}$를 추정하는 방법은 두 가지가 있다.
+    - Kalman Filtering
+        - 관측값을 예측할 때 사용
+    - Kalman Smoothing
+        - `결측값`이 있을 때 유용
+        
+---------------------
+
+# **Kalman Smoothing**
+
+- 특정 기간 또는 모든 시간동안 주어진 시계열 데이터 $y_{1}, \ldots, y_{T}$가 주어졌을 때, 상태 $\alpha_{t}(t<T)$를 추정하는 방법
+- $\hat{\alpha}_{t} = E(\alpha_{t}|y_{1},\ldots, y_{T})$
+    - $\alpha_{t}|y_{1},\ldots, y_{T}$의 사후 분포를 이용하여 계산
+        - 정확한 계산식은  [Dynamic Linear Models with R (p.62)](https://link.springer.com/book/10.1007/b135794) 또는 [Time Series Analysis by State Space Methods (p.96~97)](https://oxford.universitypressscholarship.com/view/10.1093/acprof:oso/9780199641178.001.0001/acprof-9780199641178) 참고
+- 과거, 현재 그리고 미래 데이터를 이용하기 때문에, Kalman Filtering보다 정확
+
+---------------------
+
+# **imputeTS Package**
+
+- [`imputeTS` Package](https://cran.r-project.org/web/packages/imputeTS/vignettes/imputeTS-Time-Series-Missing-Value-Imputation-in-R.pdf)은 단변량 시계열 데이터 (Univariate time series)에 결측값을 Imputation하기 위해 개발된 패키지이다.
+- [`na_kalmna()`](https://github.com/SteffenMoritz/imputeTS/blob/master/R/na_kalman.R)함수로 Kalman Smoothing 방법을 이용한 Imputation을 할 수 있다. 
+- 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/imputeTS/versions/3.2/topics/na_kalman)를 참고한다.
+
+```{r, eval=FALSE}
+na_kalman(x, model = "StructTS", smooth = TRUE, ...)
+```
+      
+- x : 결측값이 있는 시계열 데이터 또는 수치형 벡터
+- model : Kalman Smoothing이 수행되는 상태 공간 모형(State Space Model)
+    - `auto.arima` : auto.arima에 의해 적합된 ARIMA 모형
+        - ARIMA 모형은 Structural Time Series Model으로 표현 가능  
+    - `StructTS` : 최대 우도(Maximum Likelihood)에 의해 적합된 structural 모형
+- smooth : `TRUE`이면, Kalman Smoothing, `FALSE`이면 Kalmna Run(Kalman Filtering)
+
+
+------------------
+
+## **Process**
+
+> `na_kalmna()`의 Imputation 과정은 다음과 같다.
+
+1. 주어진 시계열 데이터의 `NA`의 위치를 파악한다.
+2. 시계열 데이터를 model에 명시한 함수를 이용하여 적합한다.
+3. 적합된 모형을 이용하여 Kalman Smoothing/Run 방법으로 상태 $\hat{\alpha}_{t}$를 추정한다.
+4. ` NA` 를 추정된 $\hat{y}_{t}=Z^{T}_{t}\hat{\alpha}_{t}$로 대체한다.
+
+
+------------------------
+
+## **StructTS**
+
+- `stats` Package에 있는 함수로, 주어진 시계열 데이터를 structural 모형에 적합한다.
+    - 최대 우도를 이용해 structural 모형의 모수(상태와 관측값의 분산)를 찾는다.
+- 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/StructTS), 함수 내부는 [여기](https://github.com/SurajGupta/r-source/blob/master/src/library/stats/R/StructTS.R)를 참조한다.
+
+```{r, eval=FALSE}
+StructTS(x, type = c("level", "trend", "BSM"), ...)
+```
+
+- x : 단변량 시계열 데이터
+- type : 생략할 경우, x의 frequency가 1보가 크면, "BSM", 아니면 Local Linear Trend Model
+    - level : Local Level Model
+        - $Z^{T}_{t} = 1$, $T_{t}  = 1$, $\alpha_{t}=\mu_{t}$, $R_{t} = 1$, $\eta_{t} = \xi_{t}$일 때, 모형식은 다음과 같다. 
+        
+          
+$$
+\begin{aligned}
+Y_{t} &= \mu_{t} + \epsilon_{t},~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\mu_{t+1} &= \mu_{t} +  \xi_{t}, ~~~\xi_{t}\sim N(0,\sigma^2_{\xi }),
+\end{aligned}
+$$
+
+  
+-   - trend : Local Linear Trend Model
+        - $Z^{T}_{t} = (1, 0)$, $T_{t}  = \left[\begin{matrix}
+                                        1 &  1\\ 0 &  1
+                                  \end{matrix}\right]$, $\alpha_{t}=(\mu_{t}, \delta_{t})^{T}$, $R_t=\left[\begin{matrix}
+                      1 & 0 \\ 0 & 1 \end{matrix}\right]$, $\eta_{t}=(\xi_{t},\zeta_{t})^{T}$일 때, 모형식은 다음과 같다. 
+                      
+                      
+$$
+\begin{aligned}
+Y_{t} &= \mu_{t} + \epsilon_{t},~~~~~~~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\mu_{t+1} &= \mu_{t} + \delta_{t} + \xi_{t}, ~~~\xi_{t}\sim N(0,\sigma^2_{\xi }),\\
+\delta_{t+1} &= \delta_{t} + \zeta_{t}, ~~~~~~~~~~~~\zeta_{t}\sim N(0,\sigma^2_{\zeta}),
+\end{aligned}
+$$
+
+
+-    - BSM : Basic Structural Model로써, Local Linear Trend + Seasonal Component
+        - $Z^{T}_{t} = (1,0,1,\ldots, 0)$, $T_{t} = \left[\begin{smallmatrix} 1 & 1 & \\ 
+        0 & 1 & \\ &   & -1 & - 1 & \cdots & -1 & -1 \\ 
+        &   & 1 & 0 & \cdots &0& 0\\
+        &   & 0 & 1 & \cdots & 0 &0 \\
+        &   & \vdots &\vdots &\vdots &\vdots &\vdots &\\
+        &   & 0 & 0 & \cdots & 1 & 0 
+        \end{smallmatrix}\right]$, 
+        $\alpha_{t} = (\mu_{t}, \delta_{t}, \tau_{t}, \ldots, \tau_{t-S+2})^{T}$,  $R_{t}=\left[\begin{smallmatrix}1 & 0 \\ 
+        0 & 1 \\
+        &  & 1 \\
+        & &  0 \\
+        & &  \vdots \\
+        & &  0 \\
+        \end{smallmatrix}\right]$, $\eta_{t}=(\xi_{t}, \zeta_{t},\omega_{t})^{T}$일 때, 모형식은 다음과 같다.
+    
+$$
+\begin{aligned}
+Y_{t} &= \mu_{t} + \tau_{t}  + \epsilon_{t},~~~~\epsilon_{t}\sim N(0, \sigma^2_{\epsilon})\\
+\mu_{t+1} &= \mu_{t} + \delta_{t} + \xi_{t}, ~~~~~~~~~\xi_{t}\sim N(0,\sigma^2_{\xi }),\\
+\delta_{t+1} &= \delta_{t} + \zeta_{t}, ~~~~~~~~~~~~~~~~~~~~~\zeta_{t}\sim N(0,\sigma^2_{\zeta})\\
+\tau_{t+1}&=-\sum_{s=1}^{S-1} \tau_{t+1-s} + \omega_{t}, ~~~~~~~~~~\omega_{t}\sim N(0,\sigma^2_{\omega })
+\end{aligned}
+$$
+
+
+-------------
+
+# **Application**
+
+## **Data 불러오기**
+
+
+```{r}
+pacman::p_load("dplyr", "xts", "ggplot2", "imputeTS")
+
+# In Mac
+# guess_encoding("Amtrak.csv")
+# Amtrak.data <- read.csv("Amtrak.csv", fileEncoding="EUC-KR")
+
+Amtrak.data  <- read.csv("C:/Users/User/Desktop/Amtrak.csv")
+ridership.ts <- ts(Amtrak.data$Ridership, start=c(1991,1), end=c(2004,3), freq=12)
+autoplot(ridership.ts) +
+  labs(y="Ridership") +
+  theme_bw()
+
+```
+
+---------------
+
+## **결측값 생성**
+
+```{r}
+# NA 생성
+set.seed(100)
+loc <- sample(1:length(ridership.ts), 5)    # Randomly Location
+
+ridership.ts.NA <- ridership.ts
+ridership.ts.NA[loc] <- NA
+
+# NA 갯수와 위치 
+xts(ridership.ts.NA, order = as.Date(ridership.ts.NA))
+as.Date(ridership.ts.NA)
+ggplot_na_distribution(as.numeric(ridership.ts.NA), 
+                       x_axis_labels = as.Date(ridership.ts.NA), subtitle = "") +
+  ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+# ggplot_na_distribution(as.numeric(ridership.ts), 
+#                        x_axis_labels = as.Date(Amtrak.data$Month, format = "%m/%d/%Y"))
+
+```
+
+---------------
+
+## **Imputation**
+
+```{r}
+# 1. Using Basic Structural Model (Local Linear Trend + Seasonal) Due to frequency of ridership.ts.NA
+Kalman.Imp <- na_kalman(ridership.ts.NA)  
+
+# Imputation 확인
+Kalman.Imp[loc]
+ggplot_na_imputations(ridership.ts.NA, Kalman.Imp, x_axis_labels = as.Date(ridership.ts.NA))
+
+# 실제값과 비교
+ggplot_na_imputations(ridership.ts.NA, Kalman.Imp, ridership.ts)
+
+# 2. Using Local Linear Trend
+Kalman.Imp <- na_kalman(ridership.ts.NA, type="trend")  
+
+# Imputation 확인
+Kalman.Imp[loc]
+ggplot_na_imputations(ridership.ts.NA, Kalman.Imp, x_axis_labels = as.Date(ridership.ts.NA))
+
+# 실제값과 비교
+ggplot_na_imputations(ridership.ts.NA, Kalman.Imp, ridership.ts)
+
+
+# 3. Auto.arima
+Kalman.Imp.arima <- na_kalman(ridership.ts.NA, model = "auto.arima")  
+
+# Imputation 확인
+Kalman.Imp.arima[loc]
+ggplot_na_imputations(ridership.ts.NA, Kalman.Imp.arima, x_axis_labels = as.Date(ridership.ts.NA))
+
+# 실제값과 비교
+ggplot_na_imputations(ridership.ts.NA, Kalman.Imp.arima, ridership.ts)
+
+```

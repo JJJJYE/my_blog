@@ -1,0 +1,494 @@
+---
+title: "Random Forest based on Tidymodels"
+description: |
+  R code using Tidymodels Package for Random Forest
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 04-10-2022
+preview: preview.PNG
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(width=200)
+```
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+> Package `tidymodels (Ver 0.2.0)`는 R에서 머신러닝(Machine Learning)을 `tidyverse principle`로 수행할 수 있게끔 해주는 패키지 묶음이다. 특히, 모델링에 필요한 필수 패키지들을 대부분 포함하고 있기 때문에 데이터 전처리부터  시각화, 모델링, 예측까지 모든 과정을 `tidy framework`로 진행할 수 있다. 또한, Package `caret`을 완벽하게 대체하며 보다 더 빠르고 직관적인 코드로 모델링을 수행할 수 있다. 
+Package `tidymodels`를 이용하여 `Random Forest`를 수행하는 방법을 설명하기 위해 "Heart Disease Prediction" 데이터를 예제로 사용한다. 이 데이터는 환자의 심장병을 예측하기 위해 총 918명의 환자에 대한 10개의 예측변수로 이루어진 데이터이다(출처 : Package MLDataR, Gary Hutson 2021). 여기서 **Target**은 `HeartDisease`이다.
+
+<center>
+  ![](image/그림1.png){width=85%}
+</center>
+
+<br />
+
+<center>
+  ![](image/표.png){width=70%}
+</center>
+
+
+----------
+
+# **0. Schematic Diagram**
+
+<center>
+  ![](image/diagram.jpg){width=55%}
+</center>
+
+-----------
+
+# **1. 데이터 불러오기**
+
+```{r}
+# install.packages("tidymodels")
+pacman::p_load("MLDataR",                                              # For Data
+               "data.table", "magrittr",
+               "tidymodels",
+               "doParallel", "parallel")
+
+registerDoParallel(cores=detectCores())
+
+
+data(heartdisease)
+data <- heartdisease %>%
+  mutate(HeartDisease = ifelse(HeartDisease==0, "no", "yes"))
+
+
+cols <- c("Sex", "RestingECG", "Angina", "HeartDisease")
+
+data   <- data %>% 
+  mutate_at(cols, as.factor)                                           # 범주형 변수 변환
+
+glimpse(data)                                                          # 데이터 구조 
+```
+
+-----------
+
+# **2. 데이터 분할**
+
+```{r}
+set.seed(100)                                                          # seed 고정
+data.split <- initial_split(data, prop = 0.7, strata = HeartDisease)   # Partition (Traning Data : Test Data = 7:3)/ initial_split(, strata = 층화추출할 변수)
+HD.train   <- training(data.split)
+HD.test    <- testing(data.split)
+```
+
+-----------
+
+# **3. Random Forest**
+
+## **3-1. 전처리 정의**
+
+- `Workflow`를 이용하기 위해 먼저 전처리를 정의한다.
+
+```{r}
+rec  <- recipe(HeartDisease ~ ., data = HD.train) %>%                  # recipe(formula, data)
+  step_normalize(all_numeric_predictors()) %>%                         # 모든 수치형 예측변수들을 표준화
+  step_dummy(all_nominal_predictors(), one_hot = TRUE)                 # 모든 범주형 예측변수들에 대해 원-핫 인코딩 더미변수 생성
+```
+
+-----------
+
+## **3-2. 모형 정의**
+
+- 모형을 구축하기 위해 모형을 먼저 정의한다.
+    - 모형을 정의하기 위해 `모형 타입(Type)`과 `모형 종류(set_mode)` 그리고 `사용할 패키지(set_engine)`가 필요하다. 
+        - 모형 타입 : 사용하고자하는 머신러닝 함수 정의   
+            - Random Forest는 함수 `rand_forest()`를 사용한다.
+        - 모형 종류 : Target 유형 정의 
+            - 분류(Classification) 또는 회귀(Regresssion) 중 하나를 선택한다.
+        - 사용할 패키지 : 사용하고자하는 Package 정의
+            - Random Forest는 Package `randomForest`, `ranger`, `spark`를 사용할 수 있다.
+- Random Forest의 모수에는 `mtry`, `trees`, `min_n`이 있다.
+    - `mtry` : 노드를 분할할 때 랜덤하게 선택되는 후보 예측변수 개수
+    - `trees` : 생성하고자 하는 트리의 개수 
+    - `min_n` : 터미널 노드(Terminal Node)의 최소 개수 
+- 튜닝하고 싶은 모수는 함수 `tune()`으로 지정한다.
+
+
+```{r}
+rf.tune.mod <- rand_forest(mtry  = tune(),                             # mtry : 노드를 분할할 때 랜덤하게 선택되는 후보 예측변수 개수
+                           trees = tune(),                             # trees : 생성하고자 하는 트리의 개수 
+                            min_n = tune()) %>%                        # min_n(nodesize) : 터미널 노드의 최소 개수
+  set_mode("classification") %>%                                       # Target 유형 정의(classification /  regression)
+  set_engine("randomForest" ,                                          # 사용하고자하는 패키지 정의(randomForest / ranger / spark)
+             importance = TRUE)                                        # randomForest 패키지의 함수에 대한 옵션 지정 
+
+# 실제 패키지에 어떻게 적용되는지 확인
+rf.tune.mod %>%
+  translate()
+```
+
+`Caution!` 함수 `translate()`를 통해 위에서 정의한 "rf.tune.mod"가 실제로 Package `randomForest`의 함수 `randomForest()`에 어떻게 적용되는지 확인할 수 있다.
+
+-----------
+
+## **3-3. Workflow 정의**
+
+- 앞에서 정의한 전처리와 모형을 이용하여 `Workflow`를 정의한다.
+
+```{r}
+rf.tune.wflow <- workflow() %>%                                        # Workflow 이용
+    add_recipe(rec) %>%                                                # 3-1에서 정의
+    add_model(rf.tune.mod)                                             # 3-2에서 정의
+
+```
+
+-----------
+
+## **3-4. 모수 범위 확인**
+
+- 함수 `extract_parameter_set_dials()`를 이용하여 모수들의 정보를 확인할 수 있다.
+
+```{r}
+rf.param <- extract_parameter_set_dials(rf.tune.wflow)                 
+rf.param                                                              
+```
+
+`Result!` `object`열에서 `nparam`은 모수값이 수치형임을 의미한다. 또한, `nparam[+]`는 해당 모수의 범위가 명확하게 주어졌음을 의미하고, `nparam[?]`는 모수의 범위에서 상한 또는 하한의 값이 명확하지 않다는 것을 의미한다. 이러한 경우, 상한 또는 하한의 값을 명확하게 결정하여야 한다.
+
+- 함수 `extract_parameter_dials()`를 이용하여 모수의 범위를 자세히 확인할 수 있다.
+
+```{r}
+rf.param %>%
+  extract_parameter_dials("mtry")      
+```
+
+`Result!` `mtry`의 상한이 `?`이므로 상한값을 결정하여야 한다.
+
+- 함수 `update()`를 이용하여 직접 범위를 지정할 수 있다. 
+
+```{r}
+# 함수 update()를 이용한 수정
+## 전처리가 적용된 데이터의 예측변수 개수가 상한이 되도록 설정
+rf.param %<>%
+  update(mtry =  mtry(c(1, 
+                        ncol(select(juice(prep(rec)), -HeartDisease))  # juice(prep(rec)) : Recipe 적용 -> 전처리가 적용된 데이터셋 생성, ncol(select(., -Target)) : 전처리가 적용된 데이터의 예측변수 개수
+  ))) 
+
+rf.param %>%
+  extract_parameter_dials("mtry")                                   
+```
+
+`Result!` `mtry`의 상한이 `13`으로 수정되었다.
+
+-----------
+
+## **3-5. 모형 적합**
+
+### **3-5-1. Resampling 정의**
+
+- Random Forest의 최적의 모수 조합을 찾기 위해 Resampling 방법으로 `K-Fold Cross-Validation`을 사용한다.
+
+```{r}
+set.seed(100)
+train.fold    <- vfold_cv(HD.train, v = 5)                            
+```
+
+-----------
+
+### **3-5-2. 최적의 모수 조합 찾기**
+
+- 최적의 모수 조합을 찾기 위해 `Regular Grid`, `Latin Hypercube`, `Expand Grid`를 사용한다.
+
+-----------
+
+#### **3-5-2-1. Regular Grid**
+
+```{r}
+set.seed(100)
+grid <-  rf.param %>%                                                  
+  grid_regular(levels = 2)
+grid
+```
+
+`Result!` 각 모수별로 2개씩 후보값을 두어 총 8(2 $\times$ 2 $\times$ 2)개의 후보 모수 조합을 생성하였다. 
+
+```{r}
+# 모형 적합
+set.seed(100)
+rf.tune.grid.fit <- rf.tune.wflow %>%                                  # 3-3에서 정의
+  tune_grid(
+    train.fold,                                                        # 3-5-1에서 정의 :Resampling -> 5-Cross-Validation
+    grid = grid,                                                       # 3-5-2-1에서 정의 : 후보 모수 집합 
+    control = control_grid(save_pred = TRUE,                           # Resampling의 Assessment 결과 저장
+                           parallel_over = "everything"),              # 병렬 처리(http:://tune.tidymodels.org/reference/control_grid.html) 
+    metrics = metric_set(roc_auc, accuracy)                            # Assessment 그룹에 대한 Assessment Measure
+  )
+
+# 그래프
+autoplot(rf.tune.grid.fit) + 
+  scale_color_viridis_d(direction = -1) + 
+  theme(legend.position = "top") +
+  theme_bw()
+
+# 지정된 Metric 측면에서 성능이 우수한 모형을 순서대로 확인
+show_best(rf.tune.grid.fit, "roc_auc")                                  # show_best(, "accuracy")
+
+# 최적의 모수 조합 확인
+best.rf.grid <- rf.tune.grid.fit %>% 
+  select_best("roc_auc")
+best.rf.grid 
+```
+
+`Result!` `mtry = 1`, `trees = 2000`, `min_n = 2`일 때 "ROC AUC" 측면에서 가장 우수한 성능을 보여준다.
+
+-----------
+
+#### **3-5-2-2. Latin Hypercube**
+
+```{r}
+set.seed(100)
+random <- rf.param %>%                                                  
+  grid_latin_hypercube(size = 10)
+random
+```
+
+`Result!` 10개의 후보 모수 조합을 랜덤하게 생성하였다. 
+
+```{r}
+# 모형 적합
+set.seed(100)
+rf.tune.random.fit <- rf.tune.wflow %>%                                 # 3-3에서 정의
+  tune_grid(
+    train.fold,                                                         # 3-5-1에서 정의 : Resampling -> 5-Cross-Validation
+    grid = random,                                                      # 3-5-2-2에서 정의 : 후보 모수 집합 
+    control = control_grid(save_pred = TRUE,                            # Resampling의 Assessment 결과 저장
+                           parallel_over = "everything"),               # 병렬 처리(http:://tune.tidymodels.org/reference/control_grid.html) 
+    metrics = metric_set(roc_auc, accuracy)                             # Assessment 그룹에 대한 Assessment Measure
+  )
+
+# 그래프
+autoplot(rf.tune.random.fit) + 
+  scale_color_viridis_d(direction = -1) + 
+  theme(legend.position = "top") +
+  theme_bw()
+
+# 지정된 Metric 측면에서 성능이 우수한 모형을 순서대로 확인
+show_best(rf.tune.random.fit, "roc_auc")                                # show_best(, "accuracy")
+
+# 최적의 모수 조합 확인
+best.rf.random <- rf.tune.random.fit %>% 
+  select_best("roc_auc")
+best.rf.random 
+```
+
+`Result!` `mtry = 4`, `trees = 733`, `min_n = 25`일 때 "ROC AUC" 측면에서 가장 우수한 성능을 보여준다.
+
+-----------
+
+#### **3-5-2-3. Expand Grid**
+
+- Latin Hypercube 방법에서 최적의 모수 조합인 `mtry = 4`, `trees = 733`, `min_n = 25`를 기준으로 다양한 후보값을 생성한다.
+
+```{r}
+egrid <- expand.grid(mtry  = 3:4,
+                     trees = 732:733,
+                     min_n = 24:25)
+
+egrid
+```
+
+`Result!` 후보 모수값들의 집합이 생성되었다.
+
+```{r}
+# 모형 적합
+set.seed(100)
+rf.tune.egrid.fit <- rf.tune.wflow %>%                                  # 3-3에서 정의
+  tune_grid(
+    train.fold,                                                         # 3-5-1에서 정의 : Resampling -> 5-Cross-Validation
+    grid = egrid,                                                       # 3-5-2-3에서 정의 : 후보 모수 집합 
+    control = control_grid(save_pred = TRUE,                            # Resampling의 Assessment 결과 저장
+                           parallel_over = "everything"),               # 병렬 처리(http:://tune.tidymodels.org/reference/control_grid.html) 
+    metrics = metric_set(roc_auc, accuracy)                             # Assessment 그룹에 대한 Assessment Measure
+  )
+
+# 그래프
+autoplot(rf.tune.egrid.fit) + 
+  scale_color_viridis_d(direction = -1) + 
+  theme(legend.position = "top") +
+  theme_bw()
+
+# Ref. https://juliasilge.com/blog/svm.lioost-tune-volleyball/
+rf.tune.egrid.fit %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  select(mean, mtry:min_n) %>%
+  pivot_longer(mtry:min_n,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "AUC") + 
+  theme_bw()
+
+# 지정된 Metric 측면에서 성능이 우수한 모형을 순서대로 확인
+show_best(rf.tune.egrid.fit, "roc_auc")                                # show_best(, "accuracy")
+
+# 최적의 모수 조합 확인
+best.rf.egrid <- rf.tune.egrid.fit %>% 
+  select_best("roc_auc")                                               # select_best("accuracy")
+best.rf.egrid 
+```
+
+`Result!` `mtry = 3`, `trees = 733`, `min_n = 25`일 때 "ROC AUC" 측면에서 가장 우수한 성능을 보여준다.
+
+-----------
+
+### **3-5-3. 최적의 모수 조합을 이용한 모형 적합**
+
+- 최적의 모수 조합 `mtry = 3`, `trees = 733`, `min_n = 25`를 이용하여 모형을 구축한다.
+- 함수 `finalize_workflow()`을 이용하여 앞에서 정의한 "workflow(rf.tune.wflow)"를 최적의 모수 조합을 가지는 "workflow"로 업데이트한다.
+
+```{r}
+# Workflow에 최적의 모수값 업데이트
+final.rf.wflow <- rf.tune.wflow %>%                                   # 3-3에서 정의
+  finalize_workflow(best.rf.egrid)                                    # finalize_workflow : 최적의 모수 조합을 가지는 workflow로 업데이트
+final.rf.wflow
+```
+
+`Caution!` 함수 `last_fit()`은 최적의 모수 조합에 대해 Training Data를 이용한 모형 적합과 Test Data에 대한 예측을 한 번에 수행할 수 있지만 seed 고정이 되지 않아 Reproducibility (재생산성)가 만족되지 않는다. 따라서, 모형 적합(함수 `fit()`)과 예측(함수 `augment()`)을 각각 수행하였다.
+
+```{r}
+# 모형 적합
+set.seed(100)
+final.rf <- final.rf.wflow %>% 
+  fit(data = HD.train)
+final.rf
+```
+
+```{r}
+# 최종 모형
+final.fit <- final.rf %>% 
+  extract_fit_engine()
+final.fit
+```
+
+-----------
+
+#### **3-5-3-1. 변수 중요도**
+
+```{r}
+final.fit %>%
+  vip::vip() +
+  theme_bw()
+```
+
+-----------
+
+#### **3-5-3-2. OBB Error**
+
+```{r}
+# OBB Error
+head(final.fit$err.rate)
+
+# Plot for Error
+pacman::p_load("ggplot2")
+
+oob.error.data <- data.frame(Trees=rep(1:nrow(final.fit$err.rate),times=3), 
+                             Type=rep(c("OOB","No","Yes"), 
+                                      each=nrow(final.fit$err.rate)),
+                             Error=c(final.fit$err.rate[,"OOB"],
+                                     final.fit$err.rate[,"no"],
+                                     final.fit$err.rate[,"yes"]))
+
+
+ggplot(data=oob.error.data, aes(x=Trees, y=Error)) + 
+  geom_line(aes(color=Type)) + theme_bw()
+```
+
+-----------
+
+## **3-6. 예측**
+
+```{r}
+rf.pred <- augment(final.rf, HD.test)  
+rf.pred
+```
+
+-----------
+
+## **3-7. 모형 평가**
+
+### **3-7-1. 평가 척도**
+
+
+```{r}
+conf_mat(rf.pred, truth = HeartDisease, estimate = .pred_class)        # truth : 실제 클래스,  estimate : 예측 클래스
+conf_mat(rf.pred, truth = HeartDisease, estimate = .pred_class) %>%
+  autoplot(type = "mosaic")                                            # autoplot(type = "heatmap")
+
+classification_metrics <- metric_set(accuracy, mcc, 
+                                     f_meas, kap,
+                                     sens, spec, roc_auc)              # Test Data에 대한 Assessment Measure
+classification_metrics(rf.pred, truth = HeartDisease,                  # truth : 실제 클래스,  estimate : 예측 클래스
+                       estimate = .pred_class,
+                       .pred_yes, event_level = "second")              # For roc_auc            
+```
+
+`Caution!` "ROC AUC"를 계산하기 위해서는 관심 클래스에 대한 예측 확률이 필요하다. 예제 데이터에서 관심 클래스는 "yes"이므로 "yes"에 대한 예측 확률 결과인 `.pred_yes`가 사용되었다. 또한, Target인 "HeartDisease" 변수의 유형을 "Factor" 변환하면 알파벳순으로 클래스를 부여하기 때문에 관심 클래스 "yes"가 두 번째 클래스가 된다. 따라서 옵션 `event_level = "second"`을 사용하여 관심 클래스가 "yes"임을 명시해주어야 한다.   
+
+-----------
+
+### **3-7-2. 그래프**
+
+`Caution!` 함수 "roc_curve(), gain_curve(), lift_curve(), pr_curve()"에서는 첫번째 클래스(Level)를 관심 클래스로 인식한다. R에서는 함수 `Factor()`를 이용하여 변수 유형을 변환하면 알파벳순(영어) 또는 오름차순(숫자)으로 클래스를 부여하므로 "HeartDisease" 변수의 경우 "no"가 첫번째 클래스가 되고 "yes"가 두번째 클래스가 된다. 따라서, 예제 데이터에서 관심 클래스는 "yes"이기 때문에 옵션 `event_level = "second"`을 사용하여 관심 클래스가 "yes"임을 명시해주어야 한다.
+
+#### **3-7-2-1. ROC Curve**
+
+```{r}
+rf.pred %>% 
+  roc_curve(truth = HeartDisease, .pred_yes,                           # truth : 실제 클래스,  관심 클래스 예측 확률 
+            event_level = "second") %>%                                
+  autoplot()
+```
+
+-----------
+
+#### **3-7-2-2. Gain Curve**
+
+```{r}
+rf.pred %>% 
+  gain_curve(truth = HeartDisease, .pred_yes,                          # truth : 실제 클래스,  관심 클래스 예측 확률 
+             event_level = "second") %>%                               
+  autoplot()
+```
+
+-----------
+
+#### **3-7-2-3. Lift Curve**
+
+```{r}
+rf.pred %>% 
+  lift_curve(truth = HeartDisease, .pred_yes,                          # truth : 실제 클래스,  관심 클래스 예측 확률
+             event_level = "second") %>%                               
+  autoplot()
+```
+
+-----------
+
+#### **3-7-2-4. Precision Recall Curve**
+
+```{r}
+rf.pred %>% 
+  pr_curve(truth = HeartDisease, .pred_yes,                            # truth : 실제 클래스,  관심 클래스 예측 확률 
+           event_level = "second") %>%                                 
+  autoplot()
+```
+

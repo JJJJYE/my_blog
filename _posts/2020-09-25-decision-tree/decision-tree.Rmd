@@ -1,0 +1,494 @@
+---
+title: "Decision Tree"
+description: |
+   R code using Various Packages for Decision Tree
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 09-25-2020
+preview: preview.PNG
+categories: Machine Learning
+output:
+  distill::distill_article:
+       toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+<center><img src="./image/그림2.png" width="700" height="600"></center>
+
+
+ > "rpart"와 "C5.0" 방법으로 의사결정나무모형을 실습하기 위해서 사용될 예제 데이터는 "Universal Bank_Main"로 유니버셜 은행의 고객들에 대한 데이터(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이다. 데이터는 총 2500개이며, 변수의 갯수는 13개이다. 여기서 **Target**은 `Person.Loan`이다.
+ 
+<center><img src="./image/그림1.png" width="600" height="600"></center>
+
+<br />
+
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+------------------
+
+# **1. 데이터 불러오기**
+  
+
+```{r}
+pacman::p_load("data.table",
+               "dplyr")
+
+
+UB   <- fread(paste(getwd(),"Universal Bank_Main.csv", sep="/")) %>%   # 데이터 불러오기
+    data.frame() %>%                                                   # Data frame 변환
+    select(-1)                                                         # ID변수 제거
+
+
+# select columns
+cols <- c("Family", "Education", "Personal.Loan", "Securities.Account", 
+          "CD.Account", "Online", "CreditCard")
+UB   <- UB %>% 
+    mutate_at(cols, as.factor)                                         # 범주형 변수 변환
+    
+glimpse(UB)                                                            # 데이터 구조
+```
+
+
+# **2. 데이터 분할**
+
+```{r}
+# Partition (Traning Data : Test Data = 7:3)
+
+pacman::p_load("caret")
+
+y      <- UB$Personal.Loan                            # Target
+ 
+set.seed(200)
+ind    <- createDataPartition(y, p=0.7, list=T)       # Training Data를 70%로 추출
+
+UB.trd <- UB[ind$Resample1,]                          # Traning Data
+
+UB.ted <- UB[-ind$Resample1,]                         # Test Data
+
+detach(package:caret)
+```
+
+
+
+# **3. R Package "rpart"**
+
+의사결정나무모형을 형성하기 위해 사용될 첫번째 Package는 `"rpart"`이다. `"rpart"`는 약간 수정된 CART를 사용하며, CP (Complexity Parameter)를 중심으로 분석한다. 게다가 `"rpart"`는 Cross Validation을 이용하여 최적의 CP값을 선택할 수 있도록하며, defalut값은 10-fold Cross Validation이다. 또한 가독성 좋은 그래프가 있기 때문에 트리를 시각화하기에 좋다.
+
+
+```{r, eval=FALSE}
+rpart(formula, data, method, ...)
+```
+
+- `formula` : Target과 예측 변수에 대한 공식으로써 일반적으로 Target ~ 예측변수로 적는다.
+- `data` : `formula`의 변수들이 있는 데이터 프레임
+-  `method` : Target이 범주형이면 "class", Target이 수치형이면 "anova"를 해준다.
+
+
+## **3-1. 모형 적합**
+
+```{r}
+pacman::p_load("rpart",                   # for Decision tree
+               "rattle", "rpart.plot")    # for fancyRpartPlot(가독성 좋은 그래프) 
+
+set.seed(200)                             # seed 고정 for cross-validation   
+rContol      <- rpart.control(xval=15)    # xval : Number of cross validation
+UB.trd.rtree <- rpart(Personal.Loan~., data=UB.trd,                 
+                      method="class", control = rContol)         
+
+summary(UB.trd.rtree)
+
+```
+
+먼저 첫번째로 나오는 Table에 대한 용어 설명이다.  
+
+- `CP` : Complexity Parameter로 Training Data에 대한 오분류율+나무 크기에 대한 벌점 요인으로 계산된다. 또한 CP는 나무의 복잡도를 나타냄으로써 나무의 크기를 통제하고 최적의 크기를 선택할 수 있게 해준다. 
+- `nsplit` : 분리의 횟수
+- `rel error` : $1-R^2$ root mean square error로 모형을 추정하는 데 사용된 데이터의 예측에 대한 오차
+- `xerror` : Cross-validation error
+- `xstd` : `xerror`의 표준오차
+
+`Variable importance`는 변수중요도로써, Income $>$ Education $>$ Family 임을 알 수 있다.  `Node number 1` 은 첫번째 노드에 대한 설명으로써 총 1751개의 관측값이 있으며, `predicted class`=0, `cp`=0.325, `expected loss (불순도)`= 0.1027984이다. 전체 관측값 1751개 중 클래스 "0"은 1571, 클래스 "1"은 180개 이며, 비율은 각각 0.897, 0.103이다. `left son = 2 (1366 obs)`는 왼쪽 자식 노드의 번호는 2 이고 1366개의 관측값이 있다는 뜻이다. 
+
+## **3-2. Tree 그림**
+
+<br />
+
+### **3-2-1. "Plot"**
+```{r}
+plot(UB.trd.rtree, branch=1, margin=0.2)
+text(UB.trd.rtree, all=T, use.n=T)
+```
+
+
+### **3-2-2. "fancyRpartPlot"**
+
+```{r}
+fancyRpartPlot(UB.trd.rtree) # 가독성 좋은 그래프
+```
+
+
+### **3-2-3. "visTree"**
+
+```{r}
+pacman::p_load("visNetwork","sparkline")  # 네트워크 기반 그래프
+visTree(UB.trd.rtree)
+```
+
+## **3-3. 가지치기(과적합 문제 해결)**
+
+과적합 문제를 해결하기 위해 가지치기를 수행한다. `rpart`에서 최적의  `cp` 값을 찾는 것이 중요하며, 이것은 `xerror`가 최소가 되는 `cp`를 찾으면 된다.
+
+
+```{r}
+table              <- UB.trd.rtree$cptable             # cp Table
+
+low.error          <- which.min(table[ ,"xerror"])     # table의 ”xerror”열에서 가장 낮은 값 위치 추출
+cp.best            <- table[low.error, "CP"]           # ”CP”에서 low.error에 해당하는 cp 선택
+
+UB.trd.prune.rtree <- prune(UB.trd.rtree, cp=cp.best)  # prune(트리모형, 최적의 “CP”)
+
+UB.trd.prune.rtree$cptable                             # 최종 모형에 대한 cp table
+
+
+```
+
+<br />
+
+가지치기를 함으로써 최종 모형이 완성되고 최종 모형에 대한 Tree 그림은 다음과 같다.
+
+
+```{r}
+plot(UB.trd.prune.rtree, branch=0.8, margin=0.2)
+text(UB.trd.prune.rtree, all=T, use.n=T)
+
+```
+
+
+```{r}
+fancyRpartPlot(UB.trd.prune.rtree)        # 가독성 좋은 그래프                           
+
+```
+
+
+```{r}
+visTree(UB.trd.prune.rtree)   # 네트워크 기반 그래프
+```
+
+## **3-4. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+
+test.rtree <- predict(UB.trd.prune.rtree, newdata=UB.ted, type="class")  # predict(트리모형, Test Data)       
+
+```
+
+### **3-4-1. ConfusionMatrix**
+
+```{r}
+pacman::p_load("caret")
+
+CM   <- confusionMatrix(test.rtree, UB.ted$Personal.Loan, positive="1")  # confusionMatrix(예측 클래스, 실제 클래스, positive="관심클래스")
+
+CM
+
+detach(package:caret)
+```
+
+### **3-4-2. ROC 곡선**
+<br />
+
+#### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+test.rtree.prob <- predict(UB.trd.prune.rtree, newdata=UB.ted) #  Training Data로 적합시킨 모형에 대한 Test Data의 각 클래스에 대한 예측 확률
+
+test.rtree.prob <- test.rtree.prob[,2]                         # "1"에 대한 예측 확률
+
+
+ac         <- as.numeric(as.character(UB.ted$Personal.Loan))   # 범주형을 숫자형으로 변환할 때 문자형으로 변환한 뒤 숫자형으로 변환해야함
+
+rpp        <- as.numeric(test.rtree.prob)                      # "1"에 대한 예측 확률
+
+rtree.roc  <- roc(ac, rpp, plot=T, col="red")                  # roc(실제 클래스, 예측 확률)
+
+auc        <- round(auc(rtree.roc),3)
+legend("bottomright", legend=auc, bty="n")
+
+detach(package:pROC)
+```
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("Epi")       
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(rpp, ac, plot="ROC")   # ROC(예측 확률, 실제 클래스) / 최적의 cutoff value 예측 가능
+
+detach(package:Epi)
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")
+
+rtree.pred <- prediction(test.rtree.prob, UB.ted$Personal.Loan)    # prediction(예측 확률, 실제 클레스)  
+
+rtree.perf <- performance(rtree.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(rtree.perf, col="blue")                                       # ROC Curve
+
+perf.auc   <- performance(rtree.pred, "auc")                       # AUC
+auc        <- attributes(perf.auc)$y.values
+legend("bottomright", legend=auc, bty="n")
+```
+
+### **3-4-3. 향상 차트**
+
+<br />
+
+#### **1) Package "ROCR"**
+
+```{r}
+rtree.perf <- performance(rtree.pred, "lift","rpp")                # Lift Chart                      
+plot(rtree.perf, main="lift curve", colorize=T, lwd=2) 
+
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+pacman::p_load("lift")
+
+plotLift(test.rtree.prob, UB.ted$Personal.Loan, cumulative = T, n.buckets = 24) # plotLift(예측 확률, 실제 클래스)
+
+TopDecileLift(test.rtree.prob, UB.ted$Personal.Loan)		                        # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+# **4. R Package "C50"**
+
+의사결정나무모형을 형성하기 위해 사용될 두번째 Package는 `"C50"`이다. `"C50"`은 앙상블 기법 중 부스팅을 이용하는데, 부스팅이란 붓스트랩 샘플을 독립적으로 복원 추출한 다수의 붓스트랩 트리를 하나씩 순차적으로 업그레이드하여 다음 트리에 가중치를 주는 방식으로 학습하는 방법이다.
+
+```{r, eval=FALSE}
+C5.0(x, y, trials = 1, ...)
+```
+
+- `x` : 예측 변수
+- `y` : Target
+- `trials` : 부스팅 횟수
+
+## **4-1. 모형 적합**
+
+```{r}
+pacman::p_load(C50)   
+
+set.seed(200)						 # C5.0함수는 seed값이 필요함
+
+
+tree <- C5.0(UB.trd[-9], UB.trd$Personal.Loan, trials=1)	
+tree			
+```
+
+- `Number of samples` : UB.trd의 개수
+- `Number of predictor`s : UB.trd의 독립변수 개수
+- `Tree size` : 트리 크기
+
+## **4-2. Tree 그림**
+
+```{r}
+plot(tree)
+```
+
+
+## **4-3. 최적의 부스팅 횟수**
+
+`"C5.0"`에서 가장 중요한 것은 최적의 부스팅 횟수를 찾는 것이다. 아래의 코드는 부스팅 횟수를 1~100회로 늘리면서 각 부스팅 횟수에 대해 정확도를 구한 후 정확도가 가장 높은 부스팅 횟수를 찾는 방법이다.
+
+```{r}
+pacman::p_load("progress",                                              # For progress_bar
+               "caret")                                                 # For confusionMatrix
+
+pb      <- progress_bar$new(total = 100)                                # for문의 진행상황 확인
+
+
+
+results <- c()
+
+ac      <- UB.ted$Personal.Loan                                         # 실제 클래스
+ 
+for(i in 1:100){                                                        # 부스팅 횟수 1~100회
+  
+  pb$tick()
+  
+  set.seed(200)
+  tree  <- C5.0(UB.trd[-9], UB.trd$Personal.Loan, trials=i)             # 각 부스팅 횟수에 대한 모형
+  pp.cm <- predict(tree, UB.ted, type="class")                          # 예측 클래스
+  
+  
+  CM <- confusionMatrix(as.factor(pp.cm), as.factor(ac), positive="1")  # confusionMatrix
+  
+  results[i] <- as.numeric(CM$overall[1])                               # confusionmatrix의 정확도 추출
+  
+}
+
+which.max(results);results[which.max(results)]                          # 정확도가 가장 높은 값과 위치 출력
+
+
+```
+
+<br />
+
+정확도가 가장 높은 값으로 다시 `C5.0` 함수를 이용하여 최종 모형을 구한다.
+
+```{r}
+
+set.seed(200)
+tree.10   <- C5.0(UB.trd[-9], UB.trd$Personal.Loan, trials=10)   #  최종 모형
+
+
+plot(tree.10)
+```
+
+
+## **4-4. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+
+test.10 <- predict(tree.10, newdata=UB.ted, type="class")         # predict(트리모형, Test Data)         
+
+```
+
+
+### **4-4-1. ConfusionMatrix**
+
+```{r}
+pacman::p_load("caret")
+
+CM      <- confusionMatrix(test.10, UB.ted$Personal.Loan, positive="1")  # confusionMatrix(예측 클래스, 실제 클래스, positive="관심클래스")
+
+CM
+
+detach(package:caret)
+```
+
+
+### **4-4-2. ROC 곡선**
+<br />
+
+#### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+test.10.prob <- predict(tree.10, newdata=UB.ted, type="prob")  #  Training Data로 적합시킨 모형에 대한 Test Data의 각 클래스에 대한 예측 확률
+
+test.10.prob <- test.10.prob[,2]                               # "1"에 대한 예측 확률
+
+
+ac         <- as.numeric(as.character(UB.ted$Personal.Loan))   # 범주형을 숫자형으로 변환할 때 문자형으로 변환한 뒤 숫자형으로 변환해야함
+
+
+cpp        <- as.numeric(test.10.prob)                         # "1"에 대한 예측 확률
+
+ctree.roc  <- roc(ac, cpp, plot=T, col="red")                  # roc(실제 클래스, 예측 확률)
+
+auc        <- round(auc(ctree.roc),3)
+legend("bottomright", legend=auc, bty="n")
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("Epi")       
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(cpp, ac, plot="ROC")   # ROC(예측 확률, 실제 클래스) / 최적의 cutoff value 예측 가능
+
+detach(package:Epi)
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")
+
+ctree.pred <- prediction(test.10.prob, UB.ted$Personal.Loan)       # prediction(예측 확률, 실제 클레스)  
+
+ctree.perf <- performance(ctree.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(ctree.perf, col="blue")                                       # ROC Curve
+
+perf.auc   <- performance(ctree.pred, "auc")                       # AUC
+auc        <- attributes(perf.auc)$y.values
+legend("bottomright", legend=auc, bty="n")
+```
+
+
+### **4-4-3. 향상 차트**
+<br />
+
+#### **1) Package "ROCR"**
+
+```{r}
+ctree.perf <- performance(ctree.pred, "lift","rpp")                # Lift Chart                      
+plot(ctree.perf, main="lift curve", colorize=T, lwd=2) 
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+pacman::p_load("lift")
+
+plotLift(test.10.prob, UB.ted$Personal.Loan, cumulative = T, n.buckets = 24) # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(test.10.prob, UB.ted$Personal.Loan)		  # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+# **5. 모형 비교**
+
+```{r}
+pacman::p_load("ROCR")
+
+rtree.pred <- prediction(test.rtree.prob, UB.ted$Personal.Loan)    # prediction(예측 확률, 실제 클레스)  
+
+rtree.perf <- performance(rtree.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(rtree.perf, col="blue")                                       # ROC Curve
+par(new=TRUE)
+ctree.perf <- performance(ctree.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(ctree.perf, col="red")                                        # ROC Curve
+legend("bottomright", legend=c("rpart","C50"), col=c("blue", "red"), lty=c(1,1))
+detach(package:ROCR)
+```
+

@@ -1,0 +1,656 @@
+---
+title: "Support Vector Machine based on Caret"
+description: |
+  R code using Caret Package for Support Vector Machine
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 09-29-2020
+preview: preview.PNG
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+	                    message = FALSE,
+	                    warning = FALSE)
+```
+
+> Package `"caret"`은 다양한 머신러닝 분석을 하나로 모은 패키지이며, `trainControl`을 이용하여 과적합을 방지할 수 있다. `"caret"`에서는 다양한 커널과 방법을 이용한 서포트 벡터 머신 분석을 수행할 수 있으며, 그 중 가장 많이 쓰이는 `Linear`, `Polynomial`, `Radial Basis` Kernel들을 이용하여 예제 데이터를 분석한다. 자세한 모델은 [여기를 참조한다.](https://topepo.github.io/caret/train-models-by-tag.html#support-vector-machines)  
+예제 데이터는 "Universal Bank_Main"로 유니버셜 은행의 고객들에 대한 데이터(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이다. 데이터는 총 2500개이며, 변수의 갯수는 13개이다. 여기서 **Target**은 `Person.Loan`이다.
+
+<center><img src="./image/그림1.png" width="600" height="600"></center>
+
+<br />
+
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+------------------------
+
+# **1. 데이터 불러오기**
+
+```{r}
+pacman::p_load("data.table", "dplyr") 
+
+UB   <- fread(paste(getwd(),"Universal Bank_Main.csv", sep="/")) %>%   # 데이터 불러오기
+  data.frame() %>%                                                     # Data frame 변환
+  mutate(Personal.Loan = ifelse(Personal.Loan==1, "yes","no")) %>%     # Character for classification
+  select(-1)                                                           # ID변수 제거
+
+
+
+cols <- c("Family", "Education", "Personal.Loan", "Securities.Account", 
+          "CD.Account", "Online", "CreditCard")
+
+UB   <- UB %>% 
+  mutate_at(cols, as.factor)                                          # 범주형 변수 변환
+ 
+glimpse(UB)                                                           # 데이터 구조
+
+```
+
+
+-----------
+
+# **2. 데이터 분할**
+
+```{r}
+pacman::p_load("caret")
+# Partition (Traning Data : Test Data = 7:3)
+y      <- UB$Personal.Loan                       # Target
+
+set.seed(200)
+ind    <- createDataPartition(y, p=0.7, list=F)  # Training Data를 70% 추출
+
+UB.trd <- UB[ind,]                               # Traning Data
+
+UB.ted <- UB[-ind,]                              # Test Data
+
+
+```
+
+
+----------
+
+# **3. Linear Kernel**
+## **3-1. 최적의 모수 찾기**
+
+>Linear Kernel을 이용한 서포트 벡터 머신의 최적의 모수를 찾기 위해서 `"Random Search"` 방법을 먼저 수행하였다.
+
+
+```{r}
+fitControl <- trainControl(method="cv", number=5, 
+                           search = "random", classProbs =  TRUE) # 5-Fold-Cross Validation
+                                                                  # classProbs = TRUE해야 예측 확률 출력할 수 있음
+
+```
+
+```{r}
+set.seed(100)                                   # seed 고정 For Cross Validation
+
+
+caret.rd.li <- train(Personal.Loan~.,           # Tune Parameter : Cost
+                     data = UB.trd, 
+                     method = "svmLinear",      # svmLinear : ksvm /  svmLinear2 : svm
+                     trControl = fitControl, 
+                     tuneLength = 10)           # tuneLength (탐색할 후보 모수 갯수) 
+
+caret.rd.li
+```
+
+```{r}
+plot(caret.rd.li)                             # Accuracy 
+```
+
+- `C` = 4.778511일 때 정확도가 가장 높다.
+- `C` = 4.778511을 기준으로 다양한 후보 모수를 주며 `Grid Search` 방법으로 최적의 모수를 찾는다.
+
+```{r}
+fitControl <- trainControl(method="cv", number=5, classProbs =  TRUE)    # 5-Fold-Cross Validation
+
+customGrid <- expand.grid(C = seq(4.68,4.88, by=0.01))                   # Random Search의 Best Parameter 기준으로 탐색
+```
+
+
+```{r}
+set.seed(100)                                  # seed 고정 For Cross Validation
+caret.gd.li <- train(Personal.Loan~., 
+                     data=UB.trd, 
+                     method="svmLinear", 
+                     trControl = fitControl, 
+                     tuneGrid = customGrid)    
+
+caret.gd.li
+
+```
+
+```{r}
+plot(caret.gd.li)            # Accuracy
+```
+
+- `C` = 4.68일 때 정확도가 가장 높으며, `C` = 4.778511 보다 정확도가 0.001 증가했다.
+
+
+
+```{r}
+# 최종 모형
+
+caret.gd.li$finalModel                      
+```
+
+
+----------
+
+## **3-2. 모형 평가**
+
+```{r}
+# 적합된 모형으로 Test Data의 클래스 예측
+caret.gd.li.pred <- predict(caret.gd.li, newdata=UB.ted)   # predict(svm모형, Test Data) 
+
+```
+
+### **3-2-1. ConfusionMatrix**
+
+```{r}
+confusionMatrix(caret.gd.li.pred, UB.ted$Personal.Loan, positive = "yes") # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+```
+
+<br />
+
+### **3-2-2. ROC 곡선**
+
+
+#### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+test.li.prob <- predict(caret.gd.li, newdata = UB.ted, type="prob")  #  Training Data로 적합시킨 모형에 대한 Test Data의 각 클래스에 대한 예측 확률
+
+test.li.prob <- test.li.prob[,2]                                     # "yes"에 대한 예측 확률
+
+
+ac           <- UB.ted$Personal.Loan                                 # 실제 클래스
+
+pp           <- as.numeric(test.li.prob)                             # "yes"에 대한 예측 확률
+
+tree.roc     <- roc(ac, pp, plot = T, col = "red")                   # roc(실제 클래스, 예측 확률)
+
+auc          <- round(auc(tree.roc),3)
+legend("bottomright",legend=auc, bty="n")
+
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("devtools", "Epi")
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot="ROC")		# ROC(예측 확률, 실제 클래스) / 최적의 cutoff value 예측 가능
+
+detach(package:Epi)
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                                                  
+
+li.pred <- prediction(test.li.prob, UB.ted$Personal.Loan)    # prediction(예측 확률, 실제 클레스)   
+
+
+li.perf <- performance(li.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(li.perf, col="red")                                     # ROC Curve
+abline(0,1, col="black")
+
+perf.auc        <- performance(li.pred, "auc")               # AUC
+auc             <- attributes(perf.auc)$y.values
+legend("bottomright", legend=auc, bty="n")
+```
+
+<br />
+
+
+### **3-2-3. 향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+li.perf       <- performance(li.pred, "lift", "rpp") 	       # Lift Chart
+plot(li.perf, colorize=T, lwd=2)	
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)                  # 실제 클래스를 수치형으로 변환
+
+plotLift(test.li.prob, ac.numeric, cumulative = T, n.buckets = 24)     # plotLift(예측 확률, 실제 클래스)
+
+TopDecileLift(test.li.prob, ac.numeric)		                             # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+----------
+
+# **4. Polynomial Kernel**
+## **4-1. 최적의 모수 찾기**
+
+>Polynomial Kernel을 이용한 서포트 벡터 머신의 최적의 모수를 찾기 위해서 `"Random Search"` 방법을 먼저 수행하였다.
+
+
+```{r}
+fitControl <- trainControl(method="cv", number=5, 
+                           search = "random", classProbs =  TRUE) # 5-Fold-Cross Validation
+                                                                  # classProbs = TRUE해야 예측 확률 출력할 수 있음
+
+```
+
+```{r}
+set.seed(100)                                 # seed 고정 For Cross Validation
+caret.rd.pl <- train(Personal.Loan~.,
+                     data = UB.trd, 
+                     method ="svmPoly",       # Tune Parameter : Degree, Scale, Cost
+                     trControl = fitControl, 
+                     tuneLength = 10)         # tuneLength (탐색할 후보 모수 갯수) 
+
+caret.rd.pl
+```
+
+```{r}
+plot(caret.rd.pl)                             # Accuracy 
+```
+
+- `degree` = 2, `scale` = 0.04563003, `C` = 0.5609159일 때 정확도가 가장 높다.
+- `degree` = 2, `scale` = 0.04563003, `C` = 0.5609159을 기준으로 다양한 후보 모수를 주며 `Grid Search` 방법으로 최적의 모수를 찾는다.
+
+```{r}
+fitControl <- trainControl(method="cv", number=5, classProbs =  TRUE)    # 5-Fold-Cross Validation
+
+customGrid <- expand.grid(degree = 1:3,
+                          scale  = seq(0.044,0.048, by=0.001),
+                          C      = seq(0.54,0.58, by=0.01))             # Random Search의 Best Parameter 기준으로 탐색
+```
+
+
+```{r}
+set.seed(100)                             # seed 고정 For Cross Validation
+caret.gd.pl <- train(Personal.Loan~., 
+                     data=UB.trd, 
+                     method="svmPoly",   
+                     trControl = fitControl, 
+                     tuneGrid = customGrid)    
+
+caret.gd.pl
+
+
+```
+
+```{r}
+plot(caret.gd.pl)            # Accuracy
+```
+
+- `degree` = 2, `scale` = 0.048, `C`= 0.55일 때 가장 높으며, 정확도는 똑같다.
+
+
+```{r}
+# 최종 모형
+
+caret.gd.pl$finalModel                    
+```
+
+
+----------
+
+## **4-2. 모형 평가**
+
+```{r}
+# 적합된 모형으로 Test Data의 클래스 예측
+caret.gd.pl.pred <- predict(caret.gd.pl, newdata=UB.ted)   # predict(svm모형, Test Data) 
+
+```
+
+### **4-2-1. ConfusionMatrix**
+
+```{r}
+confusionMatrix(caret.gd.pl.pred, UB.ted$Personal.Loan, positive = "yes") # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+```
+
+<br />
+
+### **4-2-2. ROC 곡선**
+
+
+#### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+test.pl.prob <- predict(caret.gd.pl, newdata = UB.ted, type="prob")  #  Training Data로 적합시킨 모형에 대한 Test Data의 각 클래스에 대한 예측 확률
+
+test.pl.prob <- test.pl.prob[,2]                                     # "yes"에 대한 예측 확률
+
+
+ac           <- UB.ted$Personal.Loan                                 # 실제 클래스
+
+pp           <- as.numeric(test.pl.prob)                             # "yes"에 대한 예측 확률
+
+tree.roc     <- roc(ac, pp, plot = T, col = "red")                   # roc(실제 클래스, 예측 확률)
+
+auc          <- round(auc(tree.roc),3)
+legend("bottomright",legend=auc, bty="n")
+
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("devtools", "Epi")
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot="ROC")		# ROC(예측 확률, 실제 클래스) / 최적의 cutoff value 예측 가능
+
+detach(package:Epi)
+
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                                                  
+
+pl.pred <- prediction(test.pl.prob, UB.ted$Personal.Loan)    # prediction(예측 확률, 실제 클레스)   
+
+
+pl.perf <- performance(pl.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(pl.perf, col="red")                                     # ROC Curve
+abline(0,1, col="black")
+
+perf.auc        <- performance(pl.pred, "auc")               # AUC
+auc             <- attributes(perf.auc)$y.values
+legend("bottomright", legend=auc, bty="n")
+```
+
+<br />
+
+
+### **4-2-3. 향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+pl.perf       <- performance(pl.pred, "lift", "rpp") 	       # Lift Chart
+plot(pl.perf, colorize=T, lwd=2)	
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)                  # 실제 클래스를 수치형으로 변환
+
+plotLift(test.pl.prob, ac.numeric, cumulative = T, n.buckets = 24)     # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(test.pl.prob, ac.numeric)		                             # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+----------
+
+
+# **5. Radial Basis Kernel**
+## **5-1. 최적의 모수 찾기**
+
+>Radial Basis Kernel을 이용한 서포트 벡터 머신의 최적의 모수를 찾기 위해서 `"Random Search"` 방법을 먼저 수행하였다.
+
+
+```{r}
+fitControl <- trainControl(method="cv", number=5, 
+                           search = "random", classProbs =  TRUE) # 5-Fold-Cross Validation
+                                                                  # classProbs = TRUE해야 예측 확률 출력할 수 있음
+
+```
+
+```{r}
+set.seed(100)                                  # seed 고정 For Cross Validation
+caret.rd.rbf <- train(Personal.Loan~., 
+                      data=UB.trd, 
+                      method="svmRadial",      # Tune Parameter : Sigma, Cost
+                      trControl = fitControl, 
+                      tuneLength=20)           # tuneLength (탐색할 후보 모수 갯수) 
+
+caret.rd.rbf
+```
+
+```{r}
+plot(caret.rd.rbf)                             # Accuracy 
+```
+
+- `sigma` = 0.02065816, `C` = 31.49844일 때 정확도가 가장 높다.
+- `sigma` = 0.02065816, `C` = 31.49844을 기준으로 다양한 후보 모수를 주며 `Grid Search` 방법으로 최적의 모수를 찾는다.
+
+```{r}
+fitControl <- trainControl(method="cv", number=5, classProbs =  TRUE)    # 5-Fold-Cross Validation
+
+customGrid <- expand.grid(sigma = seq(0.018,0.022, by=0.001),
+                          C     = seq(31.48,31.52, by=0.01))             # Random Search의 Best Parameter 기준으로 탐색
+```
+
+
+```{r}
+set.seed(100)                           # seed 고정 For Cross Validation
+caret.gd.rbf <- train(Personal.Loan~.,
+                      data=UB.trd, 
+                      method="svmRadial",  
+                      trControl = fitControl, 
+                      tuneGrid = customGrid)    
+
+caret.gd.rbf
+
+
+```
+
+```{r}
+plot(caret.gd.rbf)            # Accuracy
+```
+
+- `sigma` = 0.019, `C` = 31.49일 때 가장 높으며, 정확도는 0.001 증가했다.
+
+
+```{r}
+# 최종 모형
+
+caret.gd.rbf$finalModel                    
+```
+
+
+----------
+
+## **5-2. 모형 평가**
+
+```{r}
+# 적합된 모형으로 Test Data의 클래스 예측
+caret.gd.rbf.pred <- predict(caret.gd.rbf, newdata=UB.ted)    # predict(svm모형, Test Data) 
+
+```
+
+### **5-2-1. ConfusionMatrix**
+
+```{r}
+confusionMatrix(caret.gd.rbf.pred, UB.ted$Personal.Loan, positive = "yes") # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+```
+
+<br />
+
+### **5-2-2. ROC 곡선**
+
+
+#### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+test.rbf.prob <- predict(caret.gd.rbf, newdata = UB.ted, type="prob")  #  Training Data로 적합시킨 모형에 대한 Test Data의 각 클래스에 대한 예측 확률
+
+test.rbf.prob <- test.rbf.prob[,2]                                     # "yes"에 대한 예측 확률
+
+
+ac            <- UB.ted$Personal.Loan                                  # 실제 클래스
+
+pp            <- as.numeric(test.rbf.prob)                             # "yes"에 대한 예측 확률
+ 
+tree.roc      <- roc(ac, pp, plot = T, col = "red")                    # roc(실제 클래스, 예측 확률)
+
+auc           <- round(auc(tree.roc),3)
+legend("bottomright",legend=auc, bty="n")
+
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("devtools", "Epi")
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot="ROC")		# ROC(예측 확률, 실제 클래스) / 최적의 cutoff value 예측 가능
+
+detach(package:Epi)
+
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                                                  
+
+rbf.pred <- prediction(test.rbf.prob, UB.ted$Personal.Loan)    # prediction(예측 확률, 실제 클레스)   
+
+
+rbf.perf <- performance(rbf.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(rbf.perf, col="red")                                      # ROC Curve
+abline(0,1, col="black")
+
+perf.auc        <- performance(rbf.pred, "auc")                # AUC
+auc             <- attributes(perf.auc)$y.values
+legend("bottomright", legend=auc, bty="n")
+
+```
+
+<br />
+
+
+### **5-2-3. 향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+rbf.perf       <- performance(rbf.pred, "lift", "rpp") 	       # Lift Chart
+plot(rbf.perf, colorize=T, lwd=2)	
+	
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)                  # 실제 클래스를 수치형으로 변환
+
+plotLift(test.rbf.prob, ac.numeric, cumulative = T, n.buckets = 24)    # plotLift(예측 확률, 실제 클래스)
+
+TopDecileLift(test.rbf.prob, ac.numeric)		                           # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+----------
+
+# **6. 모형 비교**
+
+## **6-1. 예측 오차**
+
+```{r}
+pacman::p_load("tidyverse")
+
+prev.class <- data.frame(linear= caret.gd.li.pred, poly=caret.gd.pl.pred, radial=caret.gd.rbf.pred, obs=UB.ted$Personal.Loan)
+
+prev.class %>% 
+  summarise_all(funs(err=mean(obs!=.))) %>% 
+  select(-obs_err) %>% 
+  round(3)
+
+```
+
+----------
+
+## **6-2. ROC 곡선**
+
+```{r}
+pacman::p_load("plotROC")
+
+prev.prob <- data.frame(linear=test.li.prob, poly=test.pl.prob,radial=test.rbf.prob,obs=UB.ted$Personal.Loan)
+
+df.roc <- prev.prob %>% 
+  gather(key=Method,value=score,linear,poly,radial)  # score : 예측 확률
+
+
+ggroc <- ggplot(df.roc) +
+        aes(d=obs,m=score,color=Method) + 
+        geom_roc() +                                 # label : Cutoff Value
+        theme_classic()
+
+ggroc
+
+```
+
+```{r}
+calc_auc(ggroc)                         # AUC
+```
+

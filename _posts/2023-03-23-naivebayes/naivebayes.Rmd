@@ -1,0 +1,384 @@
+---
+title: "Naive Bayes Classification"
+description: |
+  Description for Naive Bayes Classification
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-03-23
+categories: Data Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+> Naive Bayes의 장점
+ 
+- 연속형과 범주형 예측 변수 모두 가능하다.
+- 튜닝(Tuning)해야 하는 초모수(Hyperparameter)가 없다.
+- Topic 분류 문제에 잘 작동한다.
+
+
+</br>
+
+ > Naive Bayes의 단점
+ 
+- 연속형 예측 변수는 정규 분포를 가정한다.
+- 예측 변수들은 서로 독립이어야 한다.
+
+<br />
+
+ > 실습 자료 : 2004년 1월 한 달간 워싱턴 D.C.에서 출발하여 뉴욕에 도착한 2,201대의 항공편에 대한 자료(출처 : www.transtats.bts.gov)이며, 총 13개의 변수를 포함하고 있다. 13개의 변수 중 분석을 위해 사용할 변수는 `CRS_DEP_TIME`, `CARRIER`, `DEST`, `ORIGIN`, `DAY_WEEK`, `Flight Status`이며,  **Target**은 `Flight Status`이다.
+ 
+<center>![](./image/그림1.png)</center>
+
+</br>
+
+<center><img src="./image/표.png" width="500" height="500"></center>
+
+</br>
+
+----------
+
+
+# **1. 데이터 불러오기**
+
+```{r, eval=F}
+pacman::p_load("data.table",
+               "dplyr",  "tidyr", "magrittr",
+               "ggplot2",
+               "e1071",                                         # For naiveBayes
+               "caret")                                         # For confusionMatrix    
+                                              
+
+delays.df <- fread("../FlightDelays.csv")                       # 데이터 불러오기
+
+
+delays.df %>%
+  as_tibble
+```
+
+```{r, echo=F}
+pacman::p_load("data.table",
+               "dplyr",  "tidyr", "magrittr",
+               "ggplot2",
+               "e1071",                                         # For naiveBayes
+               "caret")                                         # For confusionMatrix    
+      
+
+delays.df <- fread(paste(getwd(), "FlightDelays.csv", sep = "/"))   # 데이터 불러오기
+
+delays.df %>%
+  as_tibble
+```
+
+------
+
+# **2. 데이터 전처리**
+
+- 전처리는 2단계의 과정을 거친다.  
+    1. 출발시간(CRS_DEP_TIME)을 시간 단위(Hourly)로 변환한다. 
+        - 예를 들어, `1455`이면 `14시 55분`을 의미하며, 이것을 `14`로 변환한다.  
+    2. 범주형 변수들을 범주형으로 변환한다.
+
+```{r}
+# 1. 출발시간(CRS_DEP_TIME)을 시간 단위(hourly)로 변환
+# 예) 출발시간이 오전 6시와 오전 7시 사이라면, CRS_DEP_TIME = 6
+delays.df %<>%
+  data.frame() %>%                                                      # Data Frame 형태로 변환
+  mutate(CRS_DEP_TIME = floor( CRS_DEP_TIME/100 ))                      
+
+# 2. Convert to Factor
+selected.var <- c("CRS_DEP_TIME", "CARRIER", "DEST",                    # 범주형 변수 선택
+                  "ORIGIN", "DAY_WEEK", "Flight.Status")
+
+delays.df %<>%
+  mutate_at(selected.var, as.factor)                                    # 범주형으로 변환
+
+# 3. Select Variables used for Analysis
+delays.df1 <- delays.df %>%
+  select(selected.var)                                                  # 분석에 사용할 변수만 선택
+
+delays.df1 %>%
+  as_tibble
+
+glimpse(delays.df1)                                                     # 데이터 구조 확인  
+```
+
+----------
+
+# **3. 데이터 탐색**
+
+```{r}
+# 데이터 구조 변환
+visual.df <- pivot_longer(delays.df1,
+                          cols = -Flight.Status,          # Target 제외
+                          names_to = "Variables",         # 변수 이름이 입력될 새로운 열 이름
+                          values_to = "values"            # 변수에 입력된 값에 대한 새로운 열 이름
+                          )
+
+visual.df
+
+
+ggplot(visual.df, aes(values, fill = Flight.Status)) +
+  facet_wrap(~ Variables, scales = "free") +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values=c("#E69F00", "#56B4E9")) +     # 막대 색깔 지정
+  theme_bw()
+
+
+ggplot(visual.df, aes(values, fill = Flight.Status)) +
+  facet_wrap(~ Variables, scales = "free") +
+  geom_bar(position = "fill") +
+  scale_fill_manual(values=c("#E69F00", "#56B4E9")) +     # 막대 색깔 지정
+  theme_bw()
+
+
+ggplot(visual.df, aes(values, fill = Flight.Status)) +
+  facet_wrap(~ Variables, scales = "free") +
+  geom_bar(position = "stack") +
+  scale_fill_manual(values=c("#E69F00", "#56B4E9")) +     # 막대 색깔 지정
+  theme_bw()
+```
+
+
+----------
+
+# **4. 데이터 분할**
+
+```{r}
+# Partition (Training Dataset : Test Dataset = 7:3)
+y <- delays.df1$Flight.Status                                           # Target
+
+set.seed(200)
+ind         <- createDataPartition(y, p = 0.7, list = T)                # Index를 이용하여 7:3으로 분할
+delays.trd  <- delays.df1[ind$Resample1, ]                              # Training Dataset
+delays.ted  <- delays.df1[-ind$Resample1, ]                             # Test Dataset
+```
+
+----------
+
+# **5. 모형 훈련**
+
+> 함수 `naiveBayes`를 이용하여 Naive Bayes를 수행할 수 있다. 함수에서 사용할 수 있는 자세한 옵션은 [여기](https://www.rdocumentation.org/packages/e1071/versions/1.7-13/topics/naiveBayes)를 참고한다.
+
+```{r, eval = FALSE}
+naiveBayes(formula, data, laplace = 0, ...)
+```
+
+- `formula` : Target과 예측 변수의 관계를 표현하기 위한 함수로써 일반적으로 `Target ~ 예측 변수`의 형태로 표현한다.
+- `data` : `formula`에 포함된 변수들의 데이터셋
+- `laplace` : 라플라스 스무딩(Laplace Smoothing)을 위한 가중치 $\alpha$
+    - 범주형 예측 변수에 대해 사건 발생 가능성이 매우 희박하여 우도가 0이 되는 경우를 방지하기 위해 사용하는 옵션
+    - 예를 들어, 스팸 메일 분류(나이브 베이즈 PPT, p.7)에서 스팸 메일 중 "비아그라 단어가 포함"된 메일이 있을 확률, 즉, 우도 $P(\text{비아그라 포함}|\text{스팸})$에 라플라스 스무딩을 적용하면 다음과 같다.
+$$
+\begin{align*}
+P(\text{비아그라 포함}|\text{스팸})=\frac{\text{비아그라가 포함된 스팸 메일 수}+\alpha}{\text{전체 스팸 메일 수} + k\times \alpha} 
+\end{align*}
+$$
+        - $k$ : 범주형 예측 변수의 class 개수로 해당 예제에서는 "비아그라 포함 O/비아그라 포함 X"로 $k=2$이다.
+        
+------------
+
+```{r}
+delays.nb <- naiveBayes(Flight.Status ~ .,                              # Target ~ 예측 변수
+                        data = delays.trd)
+delays.nb
+```
+
+`Result!` 첫 번째 Table `A-priori probabilities`는 Target $Y$의 각 class에 대한 사전확률 $P(Y=y)$이고, 두 번째 Table `Conditional probabilities`는 예측 변수 $X$가 범주형일 때는 $P(X|Y)$를 나타내며, 연속형일 때는 평균과 표준편차를 나타낸다.
+
+------------
+
+# **6. 모형 평가**
+
+`Caution!` 모형 평가를 위해 `Test Dataset`에 대한 `예측 class/확률` 이 필요하며, 함수 `predict()`를 이용하여 생성한다. 
+
+```{r}
+# 예측 class 생성 
+pred.class <- predict(delays.nb,
+                      newdata = delays.ted[,-6])         # 함수 predict에서는 Target 제외
+
+# 예측 확률( 사후확률 P(Y|X) ) 생성
+pred.prob  <- predict(delays.nb, 
+                      newdata = delays.ted[,-6],         # 함수 predict에서는 Target 제외
+                      type = "raw")                      
+ 
+# Test Dataset의 실제값과 예측 결과
+df <- data.frame(actual = delays.ted$Flight.Status, 
+                 pred.class = pred.class, pred.prob)
+df %>%
+  as_tibble
+```
+
+```{r}
+# 일요일 오전 10시와 오전 11시 사이에 DCA (레이건 국립공항)에서 LGA (라 과디아 공항)로 가는 DL (델타 항공)의 연착 여부 예측 결과
+df[delays.ted$DAY_WEEK == 7 & delays.ted$CRS_DEP_TIME == 10 & delays.ted$ORIGIN == "DCA" &   
+   delays.ted$DEST == "LGA" & delays.ted$CARRIER == "DL",]
+```
+
+-----------
+
+## **6-1. ConfusionMatrix**
+
+```{r}
+CM <- caret::confusionMatrix(pred.class, delays.ted$Flight.Status,
+                             positive = "delayed")            # confusionMatrix(예측 class, 실제 class, positive = "관심 class")
+CM
+```
+
+</br>
+
+-----------
+
+## **6-2. ROC 곡선**
+
+```{r}
+# 예측 확률( 사후확률 P(Y|X) ) 
+pred.prob %>%
+  as_tibble
+```
+
+```{r}
+delayed.pred.prob <- pred.prob[,1]                            # "Flight.Status = delayed"에 대한 예측 확률
+
+ac <- ifelse(delays.ted$Flight.Status == "delayed", 1, 0)     # 실제 class를 수치형으로 변환               
+pp <- as.numeric(delayed.pred.prob)                           # 예측 확률을 수치형으로 변환
+```
+
+
+### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+nb.roc  <- roc(ac, pp, plot = T, col = "gray")                # roc(실제 class, 예측 확률)
+auc     <- round(auc(nb.roc), 3)
+legend("bottomright", legend = auc, bty = "n")
+```
+
+`Caution!` Package `"pROC"`를 통해 출력한 ROC 곡선은 다양한 함수를 이용해서 그래프를 수정할 수 있다.
+
+```{r}
+# 함수 plot.roc() 이용
+plot.roc(nb.roc,   
+         col="gray",                                          # Line Color
+         print.auc = TRUE,                                    # AUC 출력 여부
+         print.auc.col = "red",                               # AUC 글씨 색깔
+         print.thres = TRUE,                                  # Cutoff Value 출력 여부
+         print.thres.pch = 19,                                # Cutoff Value를 표시하는 도형 모양
+         print.thres.col = "red",                             # Cutoff Value를 표시하는 도형의 색깔
+         auc.polygon = TRUE,                                  # 곡선 아래 면적에 대한 여부
+         auc.polygon.col = "gray90")                          # 곡선 아래 면적의 색깔
+```
+
+
+```{r}
+# 함수 ggroc() 이용
+ggroc(nb.roc) +
+annotate(geom = "text", x = 0.9, y = 1.0,
+label = paste("AUC = ", auc),
+size = 5,
+color="red") +
+theme_bw()
+```
+
+
+### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("Epi")       
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot = "ROC")                                     # ROC(예측 확률, 실제 class)  
+
+```
+
+
+### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")
+
+pred <- prediction(pp, ac)                                    # prediction(예측 확률, 실제 class)  
+
+perf <- performance(pred, "tpr", "fpr")                       # performance(, "민감도", "1-특이도")                      
+plot(perf, col = "gray")                                      # ROC Curve
+
+perf.auc   <- performance(pred, "auc")                        # AUC
+auc        <- attributes(perf.auc)$y.values 
+legend("bottomright", legend = auc, bty = "n")
+
+```
+
+</br>
+
+## **6-3. 향상 차트**
+
+### **1) Package "ROCR"**
+
+```{r}
+# 향상 차트(Curve)
+perf <- performance(pred, "lift", "rpp")       # Lift Chart
+plot(perf, main = "lift curve",
+     colorize = T,                             # Coloring according to cutoff
+     lwd = 2)
+
+```
+
+### **2) Package "gains"**
+
+```{r}
+# 향상 차트(십분위)
+pacman::p_load("gains")
+
+gain <- gains(ac, pp)                           # gains(실제 class, 예측 확률)
+
+barplot(gain$mean.resp / mean(ac), 
+        names.arg = gain$depth, 
+        xlab = "Percentile", 
+        ylab = "Mean Response", 
+        main = "Decile-wise lift chart")
+```
+
+
+```{r, eval=F, echo=F, include=FALSE}
+pacman::p_load("gains")
+
+# 향상 차트(누적)
+gain <- gains(ac,                                 # 실제 class
+              pp,                                 # 예측 확률
+              groups = 100)
+
+plot(c(0, gain$cume.pct.of.total*sum(ac)) ~ c(0,gain$cume.obs), 
+     xlab = "# cases", ylab = "Cumulative", 
+     main = "", 
+     type = "l")
+lines(c(0, sum(ac)) ~ c(0, length(ac)), 
+      lty = 2)
+```
+
+```{r, eval=F, echo=F, include=FALSE}
+#### **3) Package "lift"**
+
+pacman::p_load("lift")
+
+
+plotLift(pp, ac, cumulative = T, n.buckets = 24)    # plotLift(6-2에서 생성한 예측 확률, 실제 class)
+TopDecileLift(pp, delays.ted$Flight.Status)		      # Top 10%의 향상도 출력
+
+```

@@ -1,0 +1,359 @@
+---
+title: "Comparison Various Models based on Tidymodels"
+description: |
+  R code using Tidymodels Package for Comparison Various Models
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 04-30-2022
+preview: preview.png
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+> Package `tidymodels (Ver 0.2.0)`는 R에서 머신러닝(Machine Learning)을 `tidyverse principle`로 수행할 수 있게끔 해주는 패키지 묶음이다. 특히, 모델링에 필요한 필수 패키지들을 대부분 포함하고 있기 때문에 데이터 전처리부터  시각화, 모델링, 예측까지 모든 과정을 `tidy framework`로 진행할 수 있다. 또한, Package `caret`을 완벽하게 대체하며 보다 더 빠르고 직관적인 코드로 모델링을 수행할 수 있다.  
+Package `tidymodels`를 이용하여 `여러 모형을 구축하고 비교하는 방법`을 설명하기 위해 "Heart Disease Prediction" 데이터를 예제로 사용한다. 이 데이터는 환자의 심장병을 예측하기 위해 총 918명의 환자에 대한 10개의 예측변수로 이루어진 데이터이다(출처 : Package MLDataR, Gary Hutson 2021). 여기서 **Target**은 `HeartDisease`이다.
+
+<center>
+  ![](image/그림1.png){width=85%}
+</center>
+
+<br />
+
+<center>
+  ![](image/표.png){width=70%}
+</center>
+
+----------
+
+# **0. Schematic Diagram**
+
+<center>
+  ![](image/diagram.jpg){width=55%}
+</center>
+
+-----------
+
+# **1. 데이터 불러오기**
+
+```{r}
+# install.packages("tidymodels")
+pacman::p_load("MLDataR",                                              # For Data
+               "data.table", "magrittr",
+               "tidymodels",
+               "doParallel", "parallel")
+
+registerDoParallel(cores=detectCores())
+
+
+data(heartdisease)
+data <- heartdisease %>%
+  mutate(HeartDisease = ifelse(HeartDisease==0, "no", "yes"))
+
+
+cols <- c("Sex", "RestingECG", "Angina", "HeartDisease")
+
+data   <- data %>% 
+  mutate_at(cols, as.factor)                                           # 범주형 변수 변환
+
+glimpse(data)                                                          # 데이터 구조 
+```
+
+-----------
+
+# **2. 데이터 분할**
+
+```{r}
+set.seed(100)                                                          # seed 고정
+data.split <- initial_split(data, prop = 0.7, strata = HeartDisease)   # Partition (Traning Data : Test Data = 7:3)/ initial_split(, strata = 층화추출할 변수)
+HD.train   <- training(data.split)
+HD.test    <- testing(data.split)
+```
+
+-----------
+
+# **3. 모형 적합**
+
+- 예제 데이터에 `Support Vector Machine`, `Random Forest`, `XGBoost`를 적용하고자 한다.
+- 먼저, `Workflow`를 사용하기 위해 전처리를 정의한다.
+
+-----------
+
+## **3-1. 전처리 정의**
+
+```{r}
+rec  <- recipe(HeartDisease ~ ., data = HD.train) %>%                  # recipe(formula, data)
+  step_normalize(all_numeric_predictors()) %>%                         # 모든 수치형 예측변수들을 표준화
+  step_dummy(all_nominal_predictors(), one_hot = TRUE)                 # 모든 범주형 예측변수들에 대해 원-핫 인코딩 더미변수 생성
+```
+
+-----------
+
+## **3-2. 모형 정의**
+
+### **3-2-1. Support Vector Machine**
+
+```{r}
+# Support Vector Machine (Kernel : Radial Basis Function)
+svm.rbf.mod <- svm_rbf(cost      = tune(),                             # cost : 데이터를 잘못 분류하는 선을 긋게 될 경우 지불해야 할 cost
+                       rbf_sigma = tune()) %>%                         # rbf_sigma : Precision 모수(gamma = 1/2*sigma^2)
+  set_mode("classification") %>%                                       # Target 유형 정의(classification /  regression)
+  set_engine("kernlab")                                                # 사용하고자하는 패키지 정의(kernlab /  liquidSVM)
+
+# 실제 패키지에 어떻게 적용되는지 확인
+svm.rbf.mod %>% 
+  translate()
+```
+
+-----------
+
+### **3-2-2. Random Forest**
+
+```{r}
+# Random Forest
+rf.mod <- rand_forest(mtry  = tune(),                                  # mtry : 노드를 분할할 때 랜덤하게 선택되는 후보 예측변수 개수
+                      trees = tune(),                                  # trees : 생성하고자 하는 트리의 개수 
+                      min_n = tune()) %>%                              # min_n(nodesize) : 터미널 노드의 최소 개수
+  set_mode("classification") %>%                                       # Target 유형 정의(classification /  regression)
+  set_engine("randomForest" ,                                          # 사용하고자하는 패키지 정의(randomForest / ranger / spark)
+             importance = TRUE)
+
+# 실제 패키지에 어떻게 적용되는지 확인
+rf.mod %>%
+  translate()
+```
+
+-----------
+
+### **3-2-3. XGBoost**
+
+```{r}
+# XGBoost
+xgb.mod <- boost_tree(mtry           = tune(),                         # mtry(colsample_bynode) : 노드를 분할할 때 랜덤하게 선택되는 예측변수의 개수      
+                      trees          = tune(),                         # trees(nrounds) : 생성하고자 하는 트리의 개수 
+                      tree_depth     = tune(),                         # tree_depth(max_depth) : 생성된 트리의 최대 깊이
+                      learn_rate     = tune(),                         # learn_rate(eta) : 학습률
+                      min_n          = tune(),                         # min_n(min_child_weight) : 노드를 분할하기 위해 필요한 최소 가중치 합 
+                      loss_reduction = tune(),                         # loss_reduction(gamma) : 노드 분할을 위한 최소 손실 감소값 
+                      sample_size    = tune(),                         # sample_size(subsample) : 각 부스팅 단계에서 사용되는 훈련 데이터의 비율
+                      stop_iter      = tune()) %>%                     # stop_iter(early_stop) : 조기종료를 위한 부스팅 횟수  
+  set_mode("classification") %>%                                       # Target 유형 정의(classification /  regression)
+  set_engine("xgboost")                                                # 사용하고자하는 패키지 정의                                       
+
+# 실제 패키지에 어떻게 적용되는지 확인
+xgb.mod %>% 
+  translate()
+```
+
+-----------
+
+## **3-3. Workflow Set**
+
+- 함수 [`workflow_set()`](https://workflowsets.tidymodels.org/reference/workflow_set.html)를 통해 전처리와 모형 조합에 대한 `Workflow`를 쉽게 만들 수 있다.
+
+```{r}
+ml.models <- workflow_set(preproc = list(basic = rec),                 # Recipe로 정의한 전처리를 list 형태로 저장
+                          models  = list(svm  = svm.rbf.mod,           # 앞에서 정의한 모형을 list 형태로 저장
+                                         rf   = rf.mod,  
+                                         xgb  = xgb.mod),   
+                          cross = TRUE)                                # Combination (전처리, 정의한 모형)
+
+ml.models
+```
+
+`Result!` 총 3개의 Workflow가 생성되었다.
+
+----------
+
+## **3-4. 모수 범위 업데이트**
+
+- `Random Forest`와 `XGBoost`의 `mtry`는 상한이 `?`로 설정되어 있으므로 함수 `update()`를 이용하여 범위 수정을 해야 한다.
+
+```{r}
+# 전처리가 적용된 데이터의 예측변수 개수가 상한이 되도록 설정
+rf.param <- extract_parameter_set_dials(rf.mod) %>%                          
+  update(mtry =  mtry(c(1, 
+                        ncol(select(juice(prep(rec)), -HeartDisease))  # juice(prep(rec)) : Recipe 적용 -> 전처리가 적용된 데이터셋 생성, ncol(select(., -Target)) : 전처리가 적용된 데이터의 예측변수 개수
+  ))) 
+
+# rf.param %>%
+#   extract_parameter_dials("mtry")
+
+xgb.param <- extract_parameter_set_dials(xgb.mod) %>%                          
+  update(mtry =  mtry(c(1, 
+                        ncol(select(juice(prep(rec)), -HeartDisease))  # juice(prep(rec)) : Recipe 적용 -> 전처리가 적용된 데이터셋 생성, ncol(select(., -Target)) : 전처리가 적용된 데이터의 예측변수 개수
+  ))) 
+
+# xgb.param %>%
+#   extract_parameter_dials("mtry")
+
+# RF와 XGBoost에 모수의 범위에 대한 옵션을 추가함
+ml.models %<>%
+  option_add(param_info = rf.param, id  = "basic_rf") %>%
+  option_add(param_info = xgb.param, id = "basic_xgb")
+
+ml.models                                                 
+```
+
+`Result!` "basic_rf"와 "basic_xgb"의 `option`열이 `opts[1]`로 바뀌었다.
+
+----------
+
+## **3-5. 모수 튜닝**
+
+- 함수 [`workflow_map()`](https://workflowsets.tidymodels.org/reference/workflow_map.html)는 각 `workflosw`에서 동일하게 수행할 함수이다.
+    - 예를 들어, 모수 튜닝을 수행하기 위해 위에서 생성된 3개의 workflow에 함수 `tune_grid()`이 동일하게 적용되며, 이때 함수 `workflow_map()`을 이용한다.
+
+```{r}
+set.seed(100)
+ml.models.tune <- ml.models %>%
+  workflow_map("tune_grid",                                                 # 위에서 정의된 각 workflow마다 함수 tune_grid 적용 /
+               seed = 100, verbose = TRUE,                                  # Options to workflow_map()
+               # Options to tune_grid() -> tune_grid()에 대한 인자들 지정
+               grid = 10,                                                   # 랜덤하게 생성되는 후보 모수 집합 개수 
+               resamples = vfold_cv(HD.train, v = 5),                       # 5-Fold Cross-Validation
+               control   = control_grid(save_pred = TRUE,                   # Resampling의 Assessment 결과 저장
+                                        parallel_over = "everything",       # 병렬 처리(http:://tune.tidymodels.org/reference/control_grid.html) 
+                                        save_workflow = TRUE),              # workflow가 속성의 형태로 출력에 포함
+               metrics = metric_set(roc_auc, accuracy))                     # Assessment 그룹에 대한 Assessment Measure
+ml.models.tune          
+```
+
+----------
+
+# **4. 결과**
+
+```{r}
+# Assessment Measure
+collect_metrics(ml.models.tune)
+```
+
+`Result!` 총 30(Support Vector Machine : 10, Random Forest : 10, XGBoost : 10)개의 모형들에 대한 평가 척도값들을 나타낸다.
+
+```{r}
+autoplot(
+  ml.models.tune,
+  rank_metric = "accuracy",                                             # 순위를 정렬할 Metric
+  metric = "accuracy",                                                  # 어떤 Metric을 그래프로 나타낼 것인지
+  select_best = TRUE                                                    # 각 workflow에서 최적의 모수 조합들만 그래프로 나타낼 것인지 
+) +
+  geom_text(aes(label = wflow_id)) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+`Result!` Random Forest가 "Accuracy" 측면에서 가장 우수한 성능을 보여준다.
+
+----------
+
+`Caution!` 함수 `last_fit()`은 최적의 모수 조합에 대해 Training Data를 이용한 모형 적합과 Test Data에 대한 예측을 한 번에 수행할 수 있지만 seed 고정이 되지 않아 Reproducibility (재생산성)가 만족되지 않는다. 따라서, 모형 적합(함수 `fit()`)과 예측(함수 `augment()`)을 각각 수행하였다.
+
+## **4-1. Support Vector Machine 결과**
+
+```{r}
+# 최적의 모수 조합
+svm.tune.result <- extract_workflow_set_result(ml.models.tune, id = "basic_svm") %>%
+  select_best(metric = "accuracy")                                     # select_best(metric = "roc_auc")
+svm.tune.result
+```
+
+`Result!` `cost = 2.95`, `rbf_sigma = 0.00460`일 때 "Accuracy" 측면에서 가장 우수한 성능을 보여준다.
+
+```{r}
+# 최적의 모수 조합을 이용한 모형 적합
+set.seed(100)
+svm.result <- ml.models.tune %>%
+  extract_workflow("basic_svm") %>%
+  finalize_workflow(svm.tune.result) %>%
+  fit(data = HD.train)
+
+# 최종 모형
+svm.result %>%
+  extract_fit_engine()
+```
+
+```{r}
+# 예측
+augment(svm.result, HD.test) 
+```
+
+----------
+
+## **4-2. Random Forest 결과**
+
+```{r}
+# 최적의 모수 조합
+rf.tune.result <- extract_workflow_set_result(ml.models.tune, id = "basic_rf") %>%
+  select_best(metric = "accuracy")                                     # select_best(metric = "roc_auc")
+rf.tune.result
+```
+
+`Result!` `mtry = 13`, `trees = 1372`, `min_n = 9`일 때 "Accuracy" 측면에서 가장 우수한 성능을 보여준다.
+
+```{r}
+# 최적의 모수 조합을 이용한 모형 적합
+set.seed(100)
+rf.result <- ml.models.tune %>%
+  extract_workflow("basic_rf") %>%
+  finalize_workflow(rf.tune.result) %>%
+  fit(data = HD.train)
+
+# 최종 모형
+rf.result %>%
+  extract_fit_engine()
+```
+
+
+```{r}
+# 예측
+augment(rf.result, HD.test) 
+```
+
+----------
+
+## **4-3. XGBoost 결과**
+
+```{r}
+# 최적의 모수 조합
+xgb.tune.result <- extract_workflow_set_result(ml.models.tune, id = "basic_xgb") %>%
+  select_best(metric = "accuracy")                                     # select_best(metric = "roc_auc")
+xgb.tune.result
+```
+
+`Result!` `mtry = 12`, `trees = 881`,`min_n = 2`, `tree_depth = 9`, `learn_rate = 0.0025`, `loss_reduction = 1.88`, `sample_size = 0.628`, `stop_iter = 10`일 때 "Accuracy" 측면에서 가장 우수한 성능을 보여준다.
+
+```{r}
+# 최적의 모수 조합을 이용한 모형 적합
+set.seed(100)
+xgb.result <- ml.models.tune %>%
+  extract_workflow("basic_xgb") %>%
+  finalize_workflow(xgb.tune.result) %>%
+  fit(data = HD.train)
+
+# 최종 모형
+xgb.result %>%
+  extract_fit_engine()
+```
+
+```{r}
+# 예측
+augment(xgb.result, HD.test) 
+```
+

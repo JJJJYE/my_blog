@@ -1,0 +1,281 @@
+---
+title: "Bagging based on Caret"
+description: |
+  R code using Caret Package for Random Forest of Bagging
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 10-16-2020
+preview: preview.PNG
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+	                    message = FALSE,
+	                    warning = FALSE)
+```
+
+> Package `"caret"`은 다양한 머신러닝 분석을 하나로 모은 패키지이며, `trainControl`을 이용하여 과적합을 방지할 수 있다. `"caret"`에서는 Bagging을 이용한 다양한 기법을 수행할 수 있으며, 그 중 가장 많이 쓰이는 `Random Forest`를 이용하여 예제 데이터를 분석한다. 
+예제 데이터는 "Universal Bank_Main"로 유니버셜 은행의 고객들에 대한 데이터(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이다. 데이터는 총 2500개이며, 변수의 갯수는 13개이다. 여기서 **Target**은 `Person.Loan`이다.
+
+<center><img src="./image/그림1.png" width="600" height="600"></center>
+
+<br />
+
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+----------
+
+# **1. 데이터 불러오기**
+
+```{r}
+pacman::p_load("data.table", "dplyr") 
+
+UB   <- fread(paste(getwd(),"Universal Bank_Main.csv", sep="/")) %>%   # 데이터 불러오기
+  data.frame() %>%                                                     # Data frame 변환
+  mutate(Personal.Loan = ifelse(Personal.Loan==1, "yes","no")) %>%     # Character for classification
+  select(-1)                                                           # ID변수 제거
+
+
+
+cols <- c("Family", "Education", "Personal.Loan", "Securities.Account", 
+          "CD.Account", "Online", "CreditCard")
+
+UB   <- UB %>% 
+  mutate_at(cols, as.factor)                                          # 범주형 변수 변환
+ 
+glimpse(UB)                                                           # 데이터 구조
+
+```
+
+
+-----------
+
+# **2. 데이터 분할**
+
+```{r}
+pacman::p_load("caret")
+# Partition (Traning Data : Test Data = 7:3)
+y      <- UB$Personal.Loan                       # Target
+
+set.seed(200)
+ind    <- createDataPartition(y, p=0.7, list=F)  # Training Data를 70% 추출
+
+UB.trd <- UB[ind,]                               # Traning Data
+
+UB.ted <- UB[-ind,]                              # Test Data
+
+
+```
+
+
+----------
+
+# **3. Random Forest**
+## **3-1. 최적의 모수 찾기**
+
+> Bagging에서 가장 많이 쓰이는 기법인 Random Forest의 최적의 모수를 찾기 위해서 `"Random Search"` 방법을 먼저 수행하였다.
+
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 5, search = "random")    # 5-Fold-Cross Validation
+
+```
+
+```{r}
+set.seed(100)                                                        # seed 고정 For Cross Validation
+caret.rd.rf <- train(Personal.Loan~., data = UB.trd, method = "rf",  
+                     trControl = fitControl, tuneLength = 10,        # tuneLength (탐색할 후보 모수 갯수) 
+                     ntree = 500)                                    # 생성할 Tree 갯수
+caret.rd.rf
+
+```
+
+- Tune Parameter
+   - `mtry` : 분할할 때마다 랜덤적으로 추출할 예측변수 갯수 
+
+```{r}
+plot(caret.rd.rf)         # Accuracy
+```
+
+- `mtry` = 7일 때 정확도가 가장 높다.
+- `mtry` = 7을 기준으로 다양한 후보 모수를 주며 `Grid Search` 방법으로 최적의 모수를 찾는다.
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 5)    # 5-Fold-Cross Validation
+
+
+customGrid <- expand.grid(mtry = seq(4, 10, by = 1))     # Random Search의 Best Parameter 기준으로 탐색
+
+```
+
+
+```{r}
+set.seed(100)                                                        # seed 고정 For Cross Validation
+caret.gd.rf <- train(Personal.Loan~., data = UB.trd, method = "rf", 
+                     trControl = fitControl, tuneGrid = customGrid,
+                     ntree = 500)                                    # 생성할 Tree 갯수    
+
+caret.gd.rf
+
+```
+
+```{r}
+plot(caret.gd.rf)   # Accuracy
+```
+
+- `mtry` = 9일 때 정확도가 가장 높으며, `mtry` = 7 보다 정확도가 약간 증가하였다.
+
+
+
+```{r}
+# 최종 모형
+
+caret.gd.rf$finalModel                      
+```
+
+### **3-1-1. 변수 중요도**
+
+```{r}
+rfImp <- varImp(caret.gd.rf, scale = FALSE)
+plot(rfImp)
+```
+
+### **3-1-2. OBB Error**
+
+```{r}
+head(caret.gd.rf$finalModel$err.rate)
+```
+
+```{r}
+# Plot for Error
+pacman::p_load("ggplot2")
+
+oob.error.data <- data.frame(Trees=rep(1:nrow(caret.gd.rf$finalModel$err.rate),times=3), 
+                             Type=rep(c("OOB","No","Yes"), 
+                                      each=nrow(caret.gd.rf$finalModel$err.rate)),
+                             Error=c(caret.gd.rf$finalModel$err.rate[,"OOB"],
+                                     caret.gd.rf$finalModel$err.rate[,"no"],
+                                     caret.gd.rf$finalModel$err.rate[,"yes"]))
+
+
+ggplot(data=oob.error.data, aes(x=Trees, y=Error)) + 
+  geom_line(aes(color=Type)) + theme_bw()
+
+
+```
+
+
+----------
+
+## **3-2. 모형 평가**
+
+```{r}
+# 적합된 모형으로 Test Data의 클래스 예측
+caret.gd.rf.pred <- predict(caret.gd.rf, newdata = UB.ted)   # predict(Random Forest모형, Test Data) 
+
+```
+
+### **3-2-1. ConfusionMatrix**
+
+```{r}
+confusionMatrix(caret.gd.rf.pred, UB.ted$Personal.Loan, positive = "yes") # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+```
+
+<br />
+
+### **3-2-2. ROC 곡선**
+
+
+#### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+test.rf.prob <- predict(caret.gd.rf, newdata = UB.ted, type = "prob")  #  Training Data로 적합시킨 모형에 대한 Test Data의 각 클래스에 대한 예측 확률
+
+test.rf.prob <- test.rf.prob[,2]                                       # "yes"에 대한 예측 확률
+
+
+ac           <- UB.ted$Personal.Loan                                   # 실제 클래스
+pp           <- as.numeric(test.rf.prob)                               # "yes"에 대한 예측 확률
+
+rf.roc       <- roc(ac, pp, plot = T, col = "red")                     # roc(실제 클래스, 예측 확률)
+
+auc          <- round(auc(rf.roc),3)
+legend("bottomright",legend = auc, bty = "n")
+
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("devtools", "Epi")
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot="ROC")		# ROC(예측 확률, 실제 클래스) / 최적의 cutoff value 예측 가능
+
+detach(package:Epi)
+
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                                                  
+
+rf.pred <- prediction(test.rf.prob, UB.ted$Personal.Loan)    # prediction(예측 확률, 실제 클레스)   
+
+
+rf.perf <- performance(rf.pred, "tpr", "fpr")                # performance(, "민감도", "1-특이도")                      
+plot(rf.perf, col = "red")                                   # ROC Curve
+abline(0,1, col = "black")
+
+perf.auc        <- performance(rf.pred, "auc")               # AUC
+auc             <- attributes(perf.auc)$y.values
+legend("bottomright", legend = auc, bty = "n")
+```
+
+<br />
+
+
+### **3-2-3. 향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+rf.perf       <- performance(rf.pred, "lift", "rpp") 	       # Lift Chart
+plot(rf.perf, colorize = T, lwd = 2)	
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)                  # 실제 클래스를 수치형으로 변환
+
+plotLift(test.rf.prob, ac.numeric, cumulative = T, n.buckets = 24)     # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(test.rf.prob, ac.numeric)		                             # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+

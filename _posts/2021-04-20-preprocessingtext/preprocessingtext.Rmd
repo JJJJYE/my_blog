@@ -1,0 +1,323 @@
+---
+title: "Preprocessing"
+description: |
+  Overall Preprocessing for Text Mining
+author:
+  - name: Yeongeun Jeon
+date: 04-20-2021
+categories: Text Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+- 출처 : [R를 이용한 텍스트 마이닝](http://www.kyobobook.co.kr/product/detailViewKor.laf?mallGb=KOR&ejkGb=KOR&barcode=9788946072190)
+
+> 텍스트 마이닝 (Text Mining)은 비정형 데이터인 텍스트를 분석하여 유용한 정보를 추출 및 가공하는 것을 말한다. 이 때, 비정형 데이터는 의미를 쉽게 파악하는 데 힘들기 때문에 정형화시키는 과정이 필요하며, 이를 텍스트 전처리 또는 정제화 작업이라고 부른다.
+
+
+# **토큰화**
+
+> `수집된 문서들의 집합인 말뭉치 (Corpus)를 토큰 (Token) 으로 나누는 작업`이며, 토큰이 단어일 때는 단어 토큰화, 문장일 때는 문장 토큰화라고 부른다. 일반적으로 영어에서는 단어, 한국어에서는 명사가 하나의 토큰이 된다.
+
+## **영어ver.1**
+
+```{r}
+pacman::p_load("stringr")
+
+mytext <- c("I love you", "I am student")
+
+str_extract_all(mytext, boundary("word"))
+str_extract_all(mytext, boundary("sentence"))
+
+```
+
+## **영어ver.2**
+
+```{r}
+pacman::p_load("tokenizers")
+mytext <- c("I love you", "I am student")
+tokenize_words(mytext, lowercase = FALSE)   # lowercase : 소문자 변환  
+tokenize_sentences(mytext)
+```
+
+
+
+## **한국어ver.1**
+
+```{r}
+pacman::p_load("KoNLP")
+mytext <- c("나는 아침을 먹었다", "나는 치킨을 좋아한다")
+extractNoun(mytext) # extractNoun : 의미의 핵심이라고 할 수 있는 명사 추출 / 사전에 등록되어있는 명사 기준 
+```
+
+
+# **공란 처리**
+
+> 2개 이상의  공란이  연달아 발견될 경우 해당 `공란을 1개로 변환`시키는 작업이다.
+
+## **Ver.1**
+```{r}
+mytext <- c("software enviroment", 
+            "software  enviroment",        # 공란 연이어 2개
+            "software\tenviroment")        # \t으로 분리
+str_split(mytext, ' ')                     # 단어를 ''으로 구분
+
+
+str_squish(mytext)                         # str_squish() : 두번 이상의 공백과 \t(tab) 제거
+```
+
+## **Ver.2**
+```{r}
+pacman::p_load("tm")
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+text <- tm_map(corpus, stripWhitespace)
+text[[1]]$content
+text[[2]]$content
+text[[3]]$content
+```
+
+## **Ver.3**
+```{r}
+str_replace_all(mytext, "[[:space:]]{1,}", " ")
+```
+
+
+# **대.소문자 통일**
+
+> 같은 의미를 가진 단어가 대.소문자 다를 경우 다른 단어로 분리된다. 이를 방지하기 위해 `같은 의미를 가진 단어들을 대.소문자 통일`하는 작업이다.
+
+```{r}
+mytext <- c("The 45th President of the United States, Donald Trump, states that he knows how to play trump with the former president")
+myword <- unlist(str_extract_all(mytext, boundary("word")))   # 단어 단위의 텍스트를 추출
+table(myword)
+
+```
+
+- 같은 의미를 가진 "the"와 "The", "president"와 "President"는 다른 단어로 분리되었다.
+
+## **Ver.1**
+```{r}
+myword <- str_replace(myword, "The", "the")
+myword <- str_replace(myword, "President", "president")
+myword
+```
+
+## **Ver.2**
+
+```{r}
+myword <- str_replace(myword, "Trump", "Trump_unique_")     # Trump와 trump는 다른 단어이기 때문에 
+myword <- str_replace(myword, "States", "States_unique_")   # States와 states는 다른 단어이기 때문에 
+table(tolower(myword)) # tolower : 모두 소문자 변환
+```
+
+
+# **숫자표현 제거**
+
+> 텍스트 마이닝에서 숫자표현은 여러가지 의미를 가진다. `숫자 자체가 고유한 의미를 갖는 경우`는 단순히 제거하면 안되고, `단지 숫자가 포함된 표현`이라면 모든 숫자는 하나로 통일한다. `숫자가 문장에 아무런 의미가 없는 경우`는 제거를 한다.
+
+## **Ver.1**
+
+```{r}
+mytext <- c("He is one of statisticians agreeing that R is the No.1 statistical software.")
+
+mytext2 <- str_replace_all(mytext, "[[:digit:]]{1,}", "")          # 숫자가 최소 1회 이상 연달아 등장할 경우  " "로 대체
+mytext2
+
+```
+
+
+```{r}
+mytext2 <- str_replace_all(mytext, "[[:digit:]]{1,}", "number")    # 숫자가 최소 1회 이상 연달아 등장할 경우 number로 대체
+mytext2
+```
+
+
+## **Ver.2**
+
+```{r}
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+text <- tm_map(corpus, removeNumbers)
+text[[1]]$content
+```
+
+
+# **문장부호 및 특수문자 제거**
+
+> 텍스트 마이닝에서 문장부호 (".", "," 등) 및 특수문자 ("?", "!", "@" 등)은 일반적으로 제거한다. 그러나 `똑같은 부호라도 특별한 의미가 있는 경우는 제거할 때 주의`를 해야한다.
+
+
+```{r}
+mytext <- "Baek et al. (2014) argued that the state of default-setting is critical for people to protect their own personal privacy on the Internet."
+
+
+str_split(mytext, " ")   # "  "으로 구분
+
+```
+
+- “al.”의 마침표는 중요한 의미를 같기 때문에 제거하면 안된다.
+- “default-setting”에서 “-”를 제거하면 “defaultsetting”하나의 단어가 되지만 공백으로 대체하면 “default”와 “setting” 두 단어가 되기 때문에 알맞게 판단해야한다.
+- 성 다음의 et al. (연도)는 특별한 의미를 갖으며, 규칙적 형식이 반복되기 때문에 _reference_로 대체한다.
+- “Internet.”의 마침표는 문장의 종결을 의미하며, 여기에서는 삭제해도 무방하다.
+
+## **Ver.1**
+
+```{r}
+mytext2 <- str_replace_all(mytext, "-", " ") # - => 공백
+mytext2 <- str_replace_all(mytext2, "[[:upper:]]{1}[[:alpha:]]{1,}[[:space:]](et al\\.)[[:space:]]\\([[:digit:]]{4}\\)", "_reference_") # 성 다음의 et al. (연도) => _reference_
+mytext2 <- str_replace_all(mytext2, "\\.[[:space:]]{0,}","")     # . 제거
+mytext2
+```
+
+
+## **Ver.2**
+```{r}
+mytext2 <- str_replace_all(mytext, "-", " ") # - => 공백
+mytext2 <- str_replace_all(mytext2, "[[:upper:]]{1}[[:alpha:]]{1,}[[:space:]](et al\\.)[[:space:]]\\([[:digit:]]{4}\\)", "_reference_") # 성 다음의 et al. (연도) => _reference_
+mytext2 <- str_replace_all(mytext2, "[[:punct:]]{1,}","")     # 특수문자 제거
+mytext2
+
+```
+
+
+## **Ver.3**
+
+```{r}
+mytext2 <- str_replace_all(mytext, "-", " ") # - => 공백
+mytext2 <- str_replace_all(mytext2, "[[:upper:]]{1}[[:alpha:]]{1,}[[:space:]](et al\\.)[[:space:]]\\([[:digit:]]{4}\\)", "_reference_") # 성 다음의 et al. (연도) => _reference_
+corpus <- VCorpus(VectorSource(mytext2))     # VectorSource : vector를 document로 해석
+text   <- tm_map(corpus, removePunctuation)
+text[[1]]$content
+
+```
+
+
+# **불용어 제거**
+
+> 빈번하게 사용되거나 구체적인 의미를 찾기 어려운 단어를 불용단어 또는 정지단어라 부른다. 영어에서는 "a", "an", "the" 등의 관사가 있다. `영어는 "tm" 패키지를 통해 널리 알려진 불용어 목록이 있으나 한국어는 없다.`
+
+
+```{r}
+# 다른 사용자가 모아놓은 불용단어
+pacman::p_load("tm")
+head(stopwords("en"), n=50)
+head(stopwords("SMART"), n=50)
+```
+
+## **Ver.1**
+```{r}
+mytext <- c("She is an actor", "She is the actor")
+mystopwords <- "(\\ba )|(\\ban )|(\\bthe )"  #\\b 이면 b다음에 오는 문자로시작하는 단어 중 좌우 하나라도 공백이 있으면 추출
+str_remove_all(mytext, mystopwords)
+
+```
+
+
+## **Ver.2**
+```{r}
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+text   <- tm_map(corpus, removeWords, stopwords("en")) 
+text[[1]]$content
+text[[2]]$content
+```
+
+# **어근 동일화**
+
+> 같은 의미를 가진 단어라도 문법적 기능에 따라 다양한 형태를 가진다. 예를 들어, "go"는 "goes", "gone" 등과 같이 변할 수 있다. 이 때, `문법적 또는 의미적으로 변화한 단어의 원형`을 찾아내는 작업을 말한다.
+
+## **Stemming**
+
+- 단순화된 방법을 적용해서 단어의 일부 철자가 훼손된 어근을 추출할 수 있으며, 사전에 없는 단어가 될 수 있다.
+- 단어 그 자체만을 고려하며, 속도가 빠르다.
+- 주요 알고리즘 : 마틴 포터의 Porter's Stemmer
+- 한국어에 대한 알고리즘은 존재하지 않는다.
+
+```{r}
+mytext <- c("Introducing","introduction","introduce")
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+text   <- tm_map(corpus, stemDocument)      # Porter's Stemmer
+text[[1]]$content
+text[[2]]$content
+text[[3]]$content
+```
+
+
+## **Lemmatization**
+
+- 문법적인 요소와 의미적인 부분을 감안하여 정확한 철자의 어근을 추출하며, 사전에 있는 단어가 된다.
+- 문장 속에 단어가 어떤 품사로 쓰였는지도 판단한다.
+- Stemming보다 정확하나 속도가 느리다.
+
+```{r}
+pacman::p_load("textstem")
+mytext <- c("Introducing","introduction","introduce")
+lemmatize_words(mytext)
+```
+
+
+# **엔그램**
+
+> `n회 연이어 등장하는 단어`들을 특정한 의미를 갖는 하나의 단어로 처리하는 작업이다. 그러나 엔그램이 맹목적으로 받아들이지 않아야 하며, 오히려 데이터의 복잡성을 늘릴 수 있다.
+
+```{r}
+pacman::p_load("RWeka")
+bigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=2, max=3))   # 2-3엔그램적용
+
+mytext <- c("The United States comprises fifty states.")
+NGramTokenizer(mytext, Weka_control(min=2, max=3))   # 2-3엔그램적용
+```
+
+
+# **단어와 문서에 대한 행렬**
+
+> 말뭉치 (Corpus)에 대한 전처리를 거친 후 문서×단어 행렬 (Document-Term Matrix, DTM) 또는 단어×문서 행렬 ( Term-Document Matrix, TDM)를 구축할 수 있다.
+
+## **DTM**
+
+```{r}
+mytext <- c("The sky is blue", 
+            "The sun is bright today", 
+            "The sun in the sky is bright", 
+            "We can see the shining sun, the bright sun")
+
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+dtm <- DocumentTermMatrix(corpus)           # 문서x단어 행렬
+inspect(dtm)
+```
+
+- 행이 문서, 열이 단어인 행렬
+- `Non-/sparse entries` : 1 이상의 빈도칸 개수/ 0이 적힌 빈도칸 개수
+- `Sparsity` : 전체 칸들 중 0이 적힌 빈도칸의 비율
+- `Maximal term length` : 단어들 중 최대 문자수
+- `Weighting` : term frequency (tf) : 각 칸의 숫자는 빈도
+
+## **TDM**
+
+```{r}
+mytext <- c("The sky is blue", 
+            "The sun is bright today", 
+            "The sun in the sky is bright", 
+            "We can see the shining sun, the bright sun")
+
+corpus <- VCorpus(VectorSource(mytext))     # VectorSource : vector를 document로 해석
+tdm <- TermDocumentMatrix(corpus)           # 단어x문서 행렬
+inspect(tdm)
+```
+
+- 행이 단어, 열이 문서인 행렬
+
+## **TF-IDF**
+
+> 단순히 한 문서 내 단어의 빈도수가 아니라 그 단어가 나타나는 문서들의 갯수도 고려하여 특정 단어가 특정 문서내에서 얼마나 중요한지를 나타내는 통계적 수치를 단어 빈도-역 문서 빈도 (Term Frequency — Inverse Document Frequency, TF-IDF)라고 한다.
+
+```{r}
+# TF-IDF
+dtm.t <- weightTfIdf(dtm, normalize = FALSE) # weightTfIdf : TF-IDF/ normalize : TF-IDF의 정규화 여부 / 밑이 2인 로그
+inspect(dtm.t)
+```
+

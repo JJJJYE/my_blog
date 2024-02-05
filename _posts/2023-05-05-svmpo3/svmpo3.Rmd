@@ -1,0 +1,358 @@
+---
+title: "Support Vector Machine with Polynomial Kernel using Package caret"
+description: |
+  Description for Support Vector Machine with Polynomial Kernel using Package caret
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2023-05-05
+categories: Data Mining
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+
+> Support Vector Machine의 장점
+ 
+- 분류 경계가 직사각형만 가능한 의사결정나무의 단점을 해결할 수 있다.
+- 복잡한 비선형 결정 경계를 학습하는데 유용하다.
+- 예측 변수에 분포를 가정하지 않는다. 
+
+<br />
+
+> Support Vector Machine의 단점
+
+- 초모수가 매우 많으며, 초모수에 민감하다.
+    - 최적의 모형을 찾기 위해 다양한 커널과 초모수의 조합을 평가해야 한다.
+- 모형 훈련이 느리다.
+- 연속형 예측 변수만 가능하다.
+    - 범주형 예측 변수는 더미 또는 원-핫 인코딩 변환을 수행해야 한다.
+- 해석하기 어려운 복잡한 블랙박스 모형이다.
+ 
+ <br />
+ 
+ > 실습 자료 : 유니버셜 은행의 고객 2,500명에 대한 자료(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이며, 총 13개의 변수를 포함하고 있다. 이 자료에서 **Target**은 `Personal Loan`이다.
+
+<center>![](./image/그림1.png)</center>
+
+<br />
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+<br />
+
+----------
+
+# **1. 데이터 불러오기**
+
+```{r, eval=F}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr",
+               "ggplot2", "GGally",
+               "caret",
+               "doParallel", "parallel")                                # For 병렬 처리
+
+registerDoParallel(cores=detectCores())                                 # 사용할 Core 개수 지정
+
+UB <- fread("../Universal Bank_Main.csv")                               # 데이터 불러오기
+
+UB %>%
+  as_tibble
+```
+
+```{r, echo=F}
+pacman::p_load("data.table", 
+               "tidyverse", 
+               "dplyr",
+               "ggplot2", "GGally",
+               "caret",
+               "doParallel", "parallel")                               # For 병렬 처리
+
+registerDoParallel(cores=detectCores())                                # 사용할 Core 개수 지정
+
+UB <- fread(paste(getwd(), "Universal Bank_Main.csv", sep = "/"))      # 데이터 불러오기
+
+UB %>%
+  as_tibble
+```
+
+----------
+
+# **2. 데이터 전처리**
+
+```{r}
+UB %<>%
+  data.frame() %>%                                                      # Data Frame 형태로 변환 
+  mutate(Personal.Loan = ifelse(Personal.Loan == 1, "yes", "no")) %>%   # Target을 문자형 변수로 변환
+  select(-1)                                                            # ID 변수 제거
+
+# 1. Convert to Factor
+fac.col <- c("Family", "Education", "Securities.Account", 
+             "CD.Account", "Online", "CreditCard",
+             # Target
+             "Personal.Loan")
+
+UB <- UB %>% 
+  mutate_at(fac.col, as.factor)                                         # 범주형으로 변환
+
+glimpse(UB)                                                             # 데이터 구조 확인
+
+# 2. Convert One-hot Encoding for 범주형 예측 변수
+dummies <- dummyVars(formula = ~ .,                                     # formula : ~ 예측 변수 / "." : data에 포함된 모든 변수를 의미
+                     data = UB[,-9],                                    # Dataset including Only 예측 변수 -> Target 제외
+                     fullRank = FALSE)                                  # fullRank = TRUE : Dummy Variable, fullRank = FALSE : One-hot Encoding
+
+UB.Var   <- predict(dummies, newdata = UB) %>%                          # 범주형 예측 변수에 대한 One-hot Encoding 변환
+  data.frame()                                                          # Data Frame 형태로 변환 
+
+glimpse(UB.Var)                                                         # 데이터 구조 확인
+
+# 3. Combine Target with 변환된 예측 변수
+UB.df <- data.frame(Personal.Loan = UB$Personal.Loan, 
+                    UB.Var)
+
+UB.df %>%
+  as_tibble
+
+glimpse(UB.df)                                                          # 데이터 구조 확인
+```
+
+----------
+
+# **3. 데이터 탐색**
+
+```{r}
+ggpairs(UB,                                               # In 2-1
+        columns = c("Age", "Experience", "Income",        # 수치형 예측 변수
+                    "ZIP.Code", "CCAvg", "Mortgage"),                            
+        aes(colour = Personal.Loan)) +                    # Target의 범주에 따라 색깔을 다르게 표현
+  theme_bw()  
+
+ggpairs(UB,                                               # In 2-1
+        columns = c("Age", "Experience", "Income",        # 수치형 예측 변수
+                    "ZIP.Code", "CCAvg", "Mortgage"), 
+        aes(colour = Personal.Loan)) +                    # Target의 범주에 따라 색깔을 다르게 표현
+  scale_colour_manual(values = c("#00798c", "#d1495b")) + # 특정 색깔 지정
+  scale_fill_manual(values = c("#00798c", "#d1495b")) +   # 특정 색깔 지정
+  theme_bw()
+
+ggpairs(UB,                                               # In 2-1
+        columns = c("Age", "Income",                      # 수치형 예측 변수
+                    "Family", "Education"),               # 범주형 예측 변수
+        aes(colour = Personal.Loan, alpha = 0.8)) +       # Target의 범주에 따라 색깔을 다르게 표현
+  scale_colour_manual(values = c("#E69F00", "#56B4E9")) + # 특정 색깔 지정
+  scale_fill_manual(values = c("#E69F00", "#56B4E9")) +   # 특정 색깔 지정
+  theme_bw()
+```
+
+----------
+
+# **4. 데이터 분할**
+
+```{r}
+# Partition (Training Dataset : Test Dataset = 7:3)
+y      <- UB.df$Personal.Loan                            # Target
+ 
+set.seed(200)
+ind    <- createDataPartition(y, p = 0.7, list = T)      # Index를 이용하여 7:3으로 분할
+UB.trd <- UB.df[ind$Resample1,]                          # Training Dataset
+UB.ted <- UB.df[-ind$Resample1,]                         # Test Dataset
+```
+
+---------
+
+# **5. 모형 훈련**
+
+Package `"caret"`은 통합 API를 통해 R로 기계 학습을 실행할 수 있는 매우 실용적인 방법을 제공한다. Package `"caret"`에서는 초모수의 최적의 조합을 찾는 방법으로 그리드 검색(Grid Search), 랜덤 검색(Random Search), 직접 탐색 범위 설정이 있다. 여기서는 초모수 `degree`, `scale`, `C` (Cost)의 최적의 조합값을 찾기 위해 그리드 검색을 수행하였고, 이를 기반으로 직접 탐색 범위를 설정하였다. 아래는 그리드 검색을 수행하였을 때 결과이다.
+
+```{r}
+fitControl <- trainControl(method = "cv", number = 5,  # 5-Fold Cross Validation (5-Fold CV)
+                           allowParallel = TRUE,       # 병렬 처리
+                           classProbs = TRUE)          # For 예측 확률 생성
+
+set.seed(100)                                          # For CV
+svm.po.fit <- train(Personal.Loan ~ ., data = UB.trd, 
+                    trControl = fitControl,
+                    method = "svmPoly",
+                    preProc = c("center", "scale"))    # Standardization for 예측 변수
+
+svm.po.fit
+
+plot(svm.po.fit)                                       # plot
+```
+
+`Result!` 각 초모수에 대해 랜덤하게 결정된 3개의 값을 조합하여 만든 27(3x3x3)개의 초모수 조합값 (`degree`, `scale`, `C`)에 대한 정확도를 보여주며, (`degree` = 2, `scale` = 0.1, `C` = 1)일 때 정확도가 가장 높은 것을 알 수 있다. 따라서 그리드 검색을 통해 찾은 최적의 초모수 조합값 (`degree` = 2, `scale` = 0.1, `C` = 1) 근처의 값들을 탐색 범위로 설정하여 훈련을 다시 수행할 수 있다.
+
+```{r}
+customGrid <- expand.grid(degree = 1:3,                  # degree의 탐색 범위
+                          scale = seq(0.05, 0.15, 0.05), # scale의 탐색 범위
+                          C = 1:3)                       # C의 탐색 범위
+                          
+
+set.seed(100)                                            # For CV
+svm.po.grid.fit <- train(Personal.Loan ~ ., data = UB.trd, 
+                         trControl = fitControl,
+                         tuneGrid = customGrid,
+                         method = "svmPoly",
+                         preProc = c("center", "scale")) # Standardization for 예측 변수
+svm.po.grid.fit
+```
+
+```{r}
+plot(svm.po.grid.fit)                                    # Plot
+
+svm.po.grid.fit$bestTune                                 # 최적의 초모수 조합값
+``` 
+
+`Result!` (`degree` = 2, `scale` = 0.05, `C` = 3)일 때 정확도가 가장 높다는 것을 알 수 있으며, (`degree` = 2, `scale` = 0.05, `C` = 3)를 가지는 모형을 최적의 훈련된 모형으로 선택한다.
+
+----------
+
+# **6. 모형 평가**
+
+`Caution!` 모형 평가를 위해 `Test Dataset`에 대한 `예측 class/확률` 이 필요하며, 함수 `predict()`를 이용하여 생성한다. 
+
+```{r}
+# 예측 class 생성
+svm.po.pred <- predict(svm.po.grid.fit,                                        
+                       newdata = UB.ted[,-1])            # Test Dataset including Only 예측 변수     
+
+svm.po.pred %>%
+  as_tibble
+```
+
+<br />
+
+## **6-1. ConfusionMatrix**
+
+```{r}
+CM   <- caret::confusionMatrix(svm.po.pred, UB.ted$Personal.Loan, 
+                               positive = "yes")         # confusionMatrix(예측 class, 실제 class, positive = "관심 class")
+CM
+```
+
+<br />
+
+## **6-2. ROC 곡선**
+
+```{r}
+# 예측 확률 생성 
+test.svm.prob <- predict(svm.po.grid.fit, 
+                         newdata = UB.ted[,-1],          # Test Dataset including Only 예측 변수     
+                         type = "prob")                  # 예측 확률 생성 
+
+test.svm.prob %>%
+  as_tibble
+```
+
+```{r}
+test.svm.prob <- test.svm.prob[,2]                       # "Personal.Loan = yes"에 대한 예측 확률
+
+ac  <- UB.ted$Personal.Loan                              # Test Dataset의 실제 class 
+pp  <- as.numeric(test.svm.prob)                         # 예측 확률을 수치형으로 변환
+```
+
+
+### **1) Package "pROC"**
+
+```{r}
+pacman::p_load("pROC")
+
+svm.roc  <- roc(ac, pp, plot = T, col = "gray")          # roc(실제 class, 예측 확률)
+auc      <- round(auc(svm.roc), 3)
+legend("bottomright", legend = auc, bty = "n")
+```
+
+`Caution!` Package `"pROC"`를 통해 출력한 ROC 곡선은 다양한 함수를 이용해서 그래프를 수정할 수 있다.
+
+```{r}
+# 함수 plot.roc() 이용
+plot.roc(svm.roc,   
+         col="gray",                                     # Line Color
+         print.auc = TRUE,                               # AUC 출력 여부
+         print.auc.col = "red",                          # AUC 글씨 색깔
+         print.thres = TRUE,                             # Cutoff Value 출력 여부
+         print.thres.pch = 19,                           # Cutoff Value를 표시하는 도형 모양
+         print.thres.col = "red",                        # Cutoff Value를 표시하는 도형의 색깔
+         auc.polygon = TRUE,                             # 곡선 아래 면적에 대한 여부
+         auc.polygon.col = "gray90")                     # 곡선 아래 면적의 색깔
+```
+
+
+```{r}
+# 함수 ggroc() 이용
+ggroc(svm.roc) +
+annotate(geom = "text", x = 0.9, y = 1.0,
+label = paste("AUC = ", auc),
+size = 5,
+color="red") +
+theme_bw()
+```
+
+
+### **2) Package "Epi"**
+
+```{r}
+pacman::p_load("Epi")       
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp, ac, plot = "ROC")                                # ROC(예측 확률, 실제 class)  
+```
+
+
+### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")
+
+svm.pred <- prediction(pp, ac)                           # prediction(예측 확률, 실제 class)    
+
+svm.perf <- performance(svm.pred, "tpr", "fpr")          # performance(, "민감도", "1-특이도")                      
+plot(svm.perf, col = "gray")                             # ROC Curve
+
+perf.auc   <- performance(svm.pred, "auc")               # AUC
+auc        <- attributes(perf.auc)$y.values 
+legend("bottomright", legend = auc, bty = "n")
+```
+
+<br />
+
+## **6-3. 향상 차트**
+
+### **1) Package "ROCR"**
+
+```{r}
+svm.perf <- performance(svm.pred, "lift", "rpp")         # Lift Chart
+plot(svm.perf, main = "lift curve", 
+     colorize = T,                                       # Coloring according to cutoff
+     lwd = 2)  
+```
+
+
+```{r, echo=F, eval = F, include=FALSE}
+#### **2) Package "lift"**
+
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan == "yes", 1, 0)             # Target을 수치형으로 변환
+
+plotLift(test.svm.prob, ac.numeric, cumulative = T, n.buckets = 24)   # plotLift(6-2에서 생성한 예측 확률, 실제 class)
+TopDecileLift(test.svm.prob, ac.numeric)		                          # Top 10%의 향상도 출력
+```
+

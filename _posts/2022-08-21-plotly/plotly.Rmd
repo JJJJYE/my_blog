@@ -1,0 +1,370 @@
+---
+title: "plotly Package (2)"
+description: |
+   Various Interactive Plots using Plotly Package (2)
+author:
+  - name: Yeongeun Jeon
+date: 08-21-2022
+preview: code.PNG
+categories: Data Visualization
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+```{css, echo=FALSE}
+
+p, ul, li{
+text-align: justify
+}
+
+```
+
+
+# **1. Package plotly**
+
+> Package `plotly`(Ver. 4.9.3)는 Interactive Graph를 생성할 수 있는 Package이다. 여기서 Interactive Graph란 마우스 움직임에 반응하며 실시간으로 형태가 변하는 그래프를 말한다. Interactive Graph를 생성하면 그래프를 자유롭게 조작하면서 관심 있는 부분을 자세히 살펴볼 수 있으며, HTML 포맷으로 저장하면 일반 사용자들도 웹 브라우저를 이용해 그래프를 조작할 수 있다. 
+
+```{r}
+pacman::p_load("plotly")
+```
+
+
+------------
+
+# **2. 주식 데이터**
+
+- Package `plotly`를 이용하여 Interactive Graph를 생성하기 위해 주식 데이터를 사용한다.
+- 주식 데이터는 R에서 Package `quantmod`에서 제공하는 함수 `getSymbols()`를 통해 불러올 수 있다.
+- 함수 `getSymbols()`의 첫 번째 인자로 주식 데이터를 가져오고자 하는 종목 코드 번호를 지정해야 하는데, 종목 코드 번호는 [네이버 금융](https://finance.naver.com/)에서 쉽게 찾을 수 있다.
+    - 예를 들어, 삼성의 종목 코드 번호는 "005930"이다.
+    
+![](code.png)
+
+
+```{r}
+pacman::p_load("quantmod")                  # 주식 데이터 불러오는 Package
+
+# 삼성
+samsung <- getSymbols("005930.KS",          # 가져오고자 하는 종목 코드 번호, KOSPI는 뒤에 KS, KOSDAQ은 KQ
+                      from = "2018-01-01",  # 주식 정보를 가져오고자 하는 시작 날짜
+                      to = "2022-11-16",    # 주식 정보를 가져오고자 하는 마지막 날짜
+                      auto.assign = FALSE)  # 코드 번호("005930.KS") 객체에 데이터 저장할 것인지 여부
+
+colnames(samsung) <- c("Open",              # 시가
+                       "High",              # 고가
+                       "Low",               # 저가
+                       "Close",             # 종가
+                       "Volume",            # 거래량
+                       "Adjusted")          # 수정율
+
+head(samsung)
+
+# 카카오
+kakao <- getSymbols("035720.KS",                 
+                    from = "2018-01-01",  
+                    to = "2022-11-16",    
+                    auto.assign = FALSE)  
+
+colnames(kakao) <- c("Open",              
+                     "High",             
+                     "Low",              
+                     "Close",          
+                     "Volume",           
+                     "Adjusted")          
+
+head(kakao)
+
+# LG
+lg <- getSymbols("003550.KS",                 
+                 from = "2018-01-01",  
+                 to = "2022-11-16",    
+                 auto.assign = FALSE)  
+
+colnames(lg) <- c("Open",              
+                  "High",             
+                  "Low",              
+                  "Close",          
+                  "Volume",           
+                  "Adjusted")          
+
+head(lg)
+```
+
+------------
+
+## **2-1. 전처리**
+
+- 함수 `getSymbols()`를 통해 불러온 주식 데이터의 데이터 유형은 "xts"로 시계열 구조이다.
+- Package `plotly`를 이용하여 주식 데이터를 시각화하기 위해서는 데이터 유형을 "data.frame"으로 변환해야 한다.
+
+```{r}
+# Data Frame 변환
+samsung <- samsung %>%
+  data.frame() %>%                          # Data Frame 변환
+  mutate(Date = rownames(.)) %>%            # Date 변수 생성
+  select(Date, everything())                # Date 변수 1열로 이동
+
+head(samsung)
+
+kakao <- kakao %>%
+  data.frame() %>%                         
+  mutate(Date = rownames(.)) %>%            
+  select(Date, everything())                
+
+lg <- lg %>%
+  data.frame() %>%                          
+  mutate(Date = rownames(.)) %>%            
+  select(Date, everything())                
+
+
+# 데이터 합치기
+data <- rbind( cbind(samsung, Name = "samsung"),
+               cbind(kakao, Name = "kakao"),
+               cbind(lg, Name = "lg"))
+
+head(data) 
+```
+
+------------
+
+# **3. 시각화**
+
+## **3-1. Line Plot**
+
+```{r}
+plot_ly(samsung, type = 'scatter', mode = 'lines') %>%
+  add_trace(x = ~Date,                      # X축
+            y = ~Close,                     # Y축
+            name = 'Samsung',               # 이름
+            line = list(color = 'rgb(22, 96, 167)') ) %>%  # 선 색깔    
+  layout(showlegend = FALSE)
+```
+
+-------------
+
+```{r}
+plot_ly(samsung, type = 'scatter', mode = 'lines') %>%
+  add_trace(x = ~Date,                      # X축
+            y = ~Close,                     # Y축
+            name = 'Samsung',               # 이름
+            line = list(color = 'rgb(22, 96, 167)') ) %>%  # 선 색깔            
+  layout(showlegend = FALSE,
+         xaxis = list(rangeslider = list(type = "date")))  # Add Slider
+```
+
+-------------
+
+```{r}
+# Line Plot with Three Stock Data
+## Data 변환
+data1 <- data %>%
+  select(Date, Name, Close)
+
+head(data1)
+
+data1 <- data1 %>%
+  tidyr::pivot_wider(names_from = "Name",
+                     values_from = "Close") %>%
+  data.frame()
+
+head(data1)
+
+plot_ly(data1, type = 'scatter', mode = 'lines') %>%
+  add_trace(x = ~Date,                      # X축
+            y = ~samsung,                   # Y축
+            name = 'Samsung',               # 이름
+            line = list(color = 'rgb(22, 96, 167)') )%>%  # 선 색깔  
+  add_trace(x = ~Date,                      
+            y = ~kakao,                     
+            name = 'Kakao',                
+            line = list(color = 'rbg(22, 167, 82)') ) %>%
+  add_trace(x = ~Date,                     
+            y = ~lg,                        
+            name = 'LG',                    
+            line = list(color = 'rgb(153, 22, 167)') ) %>%
+  layout(yaxis = list(title = "Close"))                  # Y축 이름    
+```
+
+-------------
+
+```{r}
+plot_ly(data1, type = 'scatter', mode = 'lines') %>%
+  add_trace(x = ~Date,                      # X축
+            y = ~samsung,                   # Y축
+            name = 'Samsung',               # 이름
+            line = list(color = 'rgb(22, 96, 167)') ) %>%  # 선 색깔  
+  add_trace(x = ~Date,                      
+            y = ~kakao,                     
+            name = 'Kakao',                
+            line = list(color = 'rbg(22, 167, 82') ) %>%
+  add_trace(x = ~Date,                     
+            y = ~lg,                        
+            name = 'LG',                    
+            line = list(color = 'rgb(153, 22, 167)') ) %>%
+  layout(yaxis = list(title = "Close"),                   # Y축 이름 
+         xaxis = list(rangeslider = list(type = "date"))) # Add Slider 
+```
+
+-------------
+
+## **3-2. TimeZone**
+
+```{r}
+plot_ly(samsung, type = 'scatter', mode = 'lines', fill = 'tozeroy',
+        fillcolor='rgba(114, 186, 59, 0.5)',              
+        line = list(color = 'rgb(114, 186, 59)')) %>%      # 선 색깔
+  add_trace(data = samsung, 
+            x = ~Date, 
+            y = ~Close, 
+            name = 'Samsung') %>%
+  layout(showlegend = FALSE)
+```
+
+-------------
+
+## **3-3. Candlestick**
+
+```{r}
+plot_ly(samsung, type = 'candlestick') %>%
+  add_trace(x = ~Date,
+        open = ~Open, close = ~Close, 
+        high = ~High, low = ~Low) %>%
+  layout(showlegend = FALSE)
+```
+
+-------------
+
+```{r}
+plot_ly(samsung, type = 'candlestick') %>%
+  add_trace(x = ~Date,
+            open = ~Open, close = ~Close, 
+            high = ~High, low = ~Low) %>%
+  layout(showlegend = FALSE,
+         xaxis = list(rangeslider = list(visible = FALSE)))   # No Slider 
+
+```
+
+-------------
+
+```{r}
+plot_ly(samsung, type = 'candlestick') %>%
+  add_trace(x = ~Date,
+            open = ~Open, close = ~Close, 
+            high = ~High, low = ~Low,
+            increasing = list(line = list(color = 'red')),      # 증가할 때 색깔
+            decreasing = list(line = list(color = 'blue'))) %>% # 감소할 때 색깔
+  layout(showlegend = FALSE)
+```
+
+-------------
+
+
+```{r}
+plot_ly(samsung, type = 'candlestick') %>%
+  add_trace(x = ~Date,
+            open = ~Open, close = ~Close, 
+            high = ~High, low = ~Low,
+            increasing = list(line = list(color = 'red')),      # 증가할 때 색깔
+            decreasing = list(line = list(color = 'blue'))) %>% # 감소할 때 색깔
+  add_lines(x = ~Date, y = ~Close,                              # 선 추가
+            line = list(color = 'black', width = 0.75)) %>%
+  layout(showlegend = FALSE)
+```
+
+-------------
+
+## **3-4. Bar Plot**
+
+```{r}
+plot_ly(samsung, type = "bar") %>%
+  add_trace(x = ~Date,
+            y = ~Volume,
+            name = "Samsung",
+            marker = list(color = 'rgb(49,130,189)'))  %>% # Bar 색깔
+  layout(showlegend = FALSE)
+```
+
+-------------
+
+```{r}
+plot_ly(samsung, type = "bar") %>%
+  add_trace(x = ~Date,
+            y = ~Volume,
+            name = "Samsung",
+            marker = list(color = 'rgb(49,130,189)'))  %>% # Bar 색깔
+  layout(showlegend = FALSE,
+         xaxis = list(rangeslider = list(type = "date"))) # Add Slider
+```
+
+-------------
+
+
+```{r}
+# Bar Plot with Three Stock Data
+##  Data 변환
+data2 <- data %>%
+  select(Date, Name, Volume)
+
+head(data2)
+
+data2 <- data2 %>%
+  tidyr::pivot_wider(names_from = "Name",
+                     values_from = "Volume") %>%
+  data.frame()
+
+head(data2)
+
+plot_ly(data2, type = "bar") %>%
+  add_trace(x = ~Date,
+            y = ~samsung,
+            name = "Samsung",
+            marker = list(color = 'rgb(22, 96, 167)'))  %>%
+  add_trace(x = ~Date,
+            y = ~kakao,
+            name = "Kakao",
+            marker = list(color = 'rbg(22, 167, 82)'))  %>%
+  add_trace(x = ~Date,
+            y = ~lg,
+            name = "LG",
+            marker = list(color = 'rgb(153, 22, 167)'))  %>%
+  layout(xaxis = list(rangeslider = list(type = "date")),
+         yaxis = list(title = "Volume"))              # Y축 이름
+```
+
+-----------
+
+## **3-5. Pie Chart**
+
+```{r}
+# Data 변환
+data3 <- data %>%
+  filter(Date == "2022-11-16") %>%
+  select(Name, Volume) 
+
+head(data3)
+
+plot_ly(data3, labels = ~Name, values = ~Volume, type = 'pie') %>%
+  layout(showlegend = FALSE,
+         title = "Volume at 2022-11-16")              # Title
+```
+
+------------
+
+```{r}
+plot_ly(data3, labels = ~Name, values = ~Volume, type = 'pie',
+        textposition = 'inside',                      # 글자 위치
+        textinfo = 'label+percent',                   # 글자 타입
+        insidetextfont = list(color = '#FFFFFF'),     # 글자 색깔
+        marker = list(colors = c('rgb(211,94,96)', 'rgb(128,133,133)', 'rgb(144,103,167)'))  # 파이 색깔
+        ) %>%
+  layout(showlegend = FALSE,
+         title = "Volume at 2022-11-16") 
+```

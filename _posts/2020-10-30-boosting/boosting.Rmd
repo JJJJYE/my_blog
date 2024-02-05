@@ -1,0 +1,656 @@
+---
+title: "Boosting"
+description: |
+  R code for Various Models of Boosting
+author:
+  - name: Yeongeun Jeon
+  - name: Jeongwook Lee
+  - name: Jung In Seo
+date: 10-30-2020
+preview: preview.PNG
+categories: Machine Learning
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+	                    message = FALSE,
+	                    warning = FALSE)
+```
+
+> Boosting은 이전 모형의 정보를 이용하여 다음 모형을 순차적으로 생성하는 알고리즘이다. 가장 대표적인 기법은 AdaBoost와 Gradient Boosting이며, 예제 데이터를 이용해 각 기법을 수행해보았다.  
+예제 데이터는 "Universal Bank_Main"로 유니버셜 은행의 고객들에 대한 데이터(출처 : Data Mining for Business Intelligence, Shmueli et al. 2010)이다. 데이터는 총 2500개이며, 변수의 갯수는 13개이다. 여기서 **Target**은 `Person.Loan`이다.
+
+
+<center><img src="./image/그림1.png" width="600" height="600"></center>
+
+<br />
+
+
+<center><img src="./image/표.png" width="400" height="400"></center>
+
+
+----------
+
+# **1. 데이터 불러오기**
+
+```{r}
+pacman::p_load("data.table", "dplyr")     
+
+UB   <- fread(paste(getwd(),"Universal Bank_Main.csv", sep="/")) %>%   # 데이터 불러오기
+  data.frame() %>%                                                     # Data frame 변환
+  mutate(Personal.Loan = ifelse(Personal.Loan==1, "yes","no")) %>%     # Character for classification
+  select(-1)                                                           # ID변수 제거
+
+
+
+cols <- c("Family", "Education", "Personal.Loan", "Securities.Account", 
+          "CD.Account", "Online", "CreditCard")
+
+UB   <- UB %>% 
+  mutate_at(cols, as.factor)                                          # 범주형 변수 변환
+
+glimpse(UB)                                                           # 데이터 구조            
+
+```
+
+
+-----------
+
+# **2. 데이터 분할**
+
+```{r}
+pacman::p_load("caret")
+# Partition (Traning Data : Test Data = 7:3)
+y      <- UB$Personal.Loan                       # Target
+
+set.seed(200)
+ind    <- createDataPartition(y, p=0.7, list=F)  # Training Data를 70% 추출
+
+UB.trd <- UB[ind,]                               # Traning Data
+
+UB.ted <- UB[-ind,]                              # Test Data
+
+detach(package:caret)
+```
+
+
+
+----------
+
+# **3. AdaBoost**
+
+>AdaBoost는 Boositng에서 가장 많이 사용되는 기법 중 하나이다.   AdaBoost는를 수행할 수 있는 Package는 `"adabag"`, `"ada"`, 
+`"fastAdaboost"`가 있으며, 예제 데이터에는 `"adabag"`를 사용하였다. `"adabag"`는 Package `"rpart"` 이용하여 tree를 생성하기 때문에 `rpart.control`로 다양한 옵션을 조정할 수 있다. 자세한 내용은 [여기를 참고한다.](https://www.rdocumentation.org/packages/adabag/versions/4.2/topics/boosting)
+
+
+```{r, eval=FALSE}
+boosting(formula, data, mfinal, ...)       # AdaBoost
+
+boosting.cv(formula, data, v, mfinal, ...) # AdaBoost based on Cross Validation
+```
+
+
+- `formula` : Target과 예측 변수에 대한 공식으로써 일반적으로 `Target ~ 예측변수` 사용
+- `data` : `formula`의 변수들이 있는 데이터 프레임
+-  `mfinal` : 반복 횟수
+- `v` : Cross Validation의 Fold 수
+
+----------
+
+## **3-1. 모형 적합**
+
+> `"adabag"`는 Package `"rpart"` 이용하여 tree를 생성하며, 생성될 tree의 최대 깊이의 기본값은 30으로 좀 더 flexible한 tree를 이용하게 된다. 만약 `stump`를 생성하고 싶다면 다음과 같은 코드를 이용하면 되지만 시간이 너무 오래 걸리는 단점이 있으므로 예제 데이터에서는 최대 깊이의 기본값을 사용하였다.
+
+```{r, eval=FALSE}
+rc <- rpart.control(maxdepth = 1)                 # Generate Stumps
+
+set.seed(100)
+UB.ada <- boosting(Personal.Loan~., data=UB.trd,
+                   mfinal=50, control = rc)	      # mfinal : 부스팅 반복 횟수
+```
+
+---------- 
+
+
+
+```{r}
+pacman::p_load("adabag")
+
+set.seed(100)
+UB.ada <- boosting(Personal.Loan~., data=UB.trd,  # Defalut maxdepth : 30
+                   mfinal=50)                     # mfinal : 부스팅 반복 횟수
+```
+
+
+### **3-1-1. 변수 중요도**
+
+
+```{r}
+# 변수 중요도
+UB.ada$importance
+```
+
+
+### **3-1-2. 가중치**
+
+```{r}
+UB.ada$weights								                    # 각 Tree에 대한 정보의 양
+```
+
+
+----------
+
+## **3-2. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+UB.pred.ada <- predict(UB.ada, newdata=UB.ted) 			# predict(AdaBoost모형, Test Data)
+
+```
+
+
+### **ConfusionMatrix**
+
+```{r}
+pp <- as.factor(UB.pred.ada$class)                         # 예측 클래스 : Charactor 
+                                                           # Character covert to Factor
+
+confusionMatrix(pp, UB.ted$Personal.Loan, positive="yes")  # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+```
+
+<br />
+
+### **ROC 곡선**
+
+
+#### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac     <- UB.ted$Personal.Loan                              # 실제 클래스
+
+pp     <- UB.pred.ada$prob[,2]	                            # "yes"에 대한 예측 확률 출력
+
+
+ada.roc <- roc(ac, pp, plot=T, col="red")                   # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(ada.roc), 3)                               # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+ada.pred <- prediction(pp, ac)                      # prediction(예측 확률, 실제 클래스)
+
+ada.perf <- performance(ada.pred, "tpr", "fpr")     # performance(, "민감도", "1-특이도")                      
+plot(ada.perf, col="red")                           # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(ada.pred, "auc")            # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+```
+
+<br />
+
+
+### **향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+ada.lift <- performance(ada.pred,"lift", "rpp")      # Lift chart
+plot(ada.lift, colorize=T, lwd=2)			
+
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)     # 실제 클래스를 수치형으로 변환
+
+plotLift(pp, ac.numeric, cumulative = T, n.buckets =24)   # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac.numeric)                             # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+----------
+
+# **4. Gradient Boosting**
+
+>Gradient Boosting은 Boosting에서 가장 많이 쓰이는 방법 중 하나이며, 손실함수가 최소가 되도록하는 값을 예측한다. Gradient Boosting을 수행하기 위하여 Package `"gbm"`을 사용하였다. 자세한 내용은 [여기를 참고한다.](https://www.rdocumentation.org/packages/gbm/versions/2.1.8/topics/gbm)
+
+
+
+```{r, eval=FALSE}
+gbm(formula, data, distribution, n.trees, interaction.depth, shrinkage, cv.folds, ...)       
+```
+
+
+- `formula` : Target과 예측 변수에 대한 공식으로써 일반적으로 `Target ~ 예측변수` 사용
+- `data` : `formula`의 변수들이 있는 데이터 프레임
+-  `distribution` : Loss Function
+- `n.trees` : 생성할 나무 수
+- `interaction.depth` : 생성되는 나무의 최대 깊이
+- `shrinkage` : Learning Rate
+- `cv.folds` : Cross Validation의 Fold 수로, 값을 지정해준다면 모형은 Cross Validation을 수행하며 적합
+
+----------
+
+## **4-1. 모형 적합**
+
+```{r}
+pacman::p_load("gbm")
+
+# gbm 은 distribution="bernoulli"일 때, Target이 0,1이어야함
+UB.trd <- UB.trd %>%
+  mutate(Personal.Loan = ifelse(Personal.Loan=="yes", 1,0)) 
+  
+
+set.seed(100)
+UB.gbm <- gbm(Personal.Loan~., data=UB.trd,
+              distribution="bernoulli",       # distribution : loss function/ 범주형 : bernoulli(이진분류) / 수치형 : gaussian(squared error) 
+              n.trees=50,                     # 생성되는 tree의 수
+              interaction.depth=30,           # 각 tree의 최대 깊이
+              shrinkage = 0.1,                # Learning Rate
+              cv.folds=5)                     # Cross Validation 수	 
+```
+
+### **4-1-1. 변수 중요도**
+
+```{r}
+# 변수 중요도
+summary(UB.gbm, cBars = 10, las=2)            # cBars : 상위 몇개 나타낼 것인지 
+                                              
+```
+
+
+### **4-1-2. 최적 부스팅 반복 수 찾기**
+
+```{r}
+ntrees.op <- gbm.perf(UB.gbm, plot.it = T, method="cv")          
+```
+
+- 검은 선은 Train Error이며, 초록선은 Validation Error이다.
+
+```{r}
+ntrees.op
+```
+
+```{r}
+# 최적의 반복횟수로 다시 적합
+set.seed(100)
+UB.gbm <- gbm(Personal.Loan~., data=UB.trd,
+              distribution="bernoulli",       # distribution : loss function/ 범주형 : bernoulli(이진분류) / 수치형 : gaussian(squared error) 
+              n.trees=ntrees.op,              # 생성되는 tree의 수
+              interaction.depth=30,           # 각 tree의 최대 깊이
+              shrinkage = 0.1,                # Learning Rate
+              cv.folds=5)                     # Cross Validation 수	
+```
+
+
+----------
+
+## **4-2. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+UB.pred.gbm <- predict(UB.gbm, newdata=UB.ted, 
+                       type="response",       # "1"에 대한 예측확률 출력
+                       ntrees=ntrees.op)      # ntrees : 몇 개의 나무를 사용하여 예측할 것인지
+                                              # gbm은 distribution이 distribution이 "bernoulli"일 때, type="response"를 해야 예측 확률을 return 
+
+
+```
+
+
+### **ConfusionMatrix**
+
+```{r}
+cv <- 0.5                                                       # cutoff value
+
+pp <- as.factor(ifelse(UB.pred.gbm>cv,"yes","no"))              # 예측 확률>cv이면 "yes" 아니면 "no" 
+
+confusionMatrix(pp, UB.ted$Personal.Loan, positive="yes")       # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+```
+
+<br />
+
+### **ROC 곡선**
+
+
+#### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac     <- UB.ted$Personal.Loan                              # 실제 클래스
+
+pp     <- UB.pred.gbm                                       # "1=yes"에 대한 예측 확률 출력
+
+
+gbm.roc <- roc(ac, pp, plot=T, col="red")                   # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(gbm.roc), 3)                               # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+gbm.pred <- prediction(pp, ac)                      # prediction(예측 확률, 실제 클래스)
+
+gbm.perf <- performance(gbm.pred, "tpr", "fpr")     # performance(, "민감도", "1-특이도")                      
+plot(gbm.perf, col="red")                           # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(gbm.pred, "auc")            # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+
+```
+
+<br />
+
+
+### **향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+gbm.lift <- performance(gbm.pred,"lift", "rpp")      # Lift chart
+plot(gbm.lift, colorize=T, lwd=2)			
+
+
+detach(package:ROCR)
+
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)     # 실제 클래스를 수치형으로 변환
+
+plotLift(pp, ac.numeric, cumulative = T, n.buckets =24)   # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac.numeric)                             # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+----------
+
+# **5. XGBoost**
+
+>XGBoost는 Extreme Gradient Boosting으로 Gradient Boosting을 기반으로 확장되었다. XGBoost를 수행하기 위해 Package `"xgboost"`를 사용하였다. 자세한 내용은 [여기를 참고한다.](https://www.rdocumentation.org/packages/xgboost/versions/1.2.0.1/topics/xgb.train)
+
+
+
+```{r, eval=FALSE}
+xgb.train(params, data, nrounds, watchlist, , ...)     
+```
+
+
+- `params` : XGBoost의 Hyperparameter들에 대한 정보가 있는 `List`
+- `data` : `xgb.DMatrix` 형태의 dataset
+-  `nrounds` : 최대 반복 수
+- `watchlist` : 모형 성능 평가에 사용할 `xgb.DMatrix` dataset의 이름이 적혀있는 `List` 
+
+----------
+
+## **5-1. 모형 적합**
+
+```{r}
+pacman::p_load("xgboost",                               # For xgb.train
+               "Matrix")                                # For sparse.model.matrix
+
+
+# XGBoost는 변수가 모두 수치형이어야 함!
+# sparse.model.matrix : 범주형 변수를 더미변수로 바꿔줌
+trainm       <- sparse.model.matrix(Personal.Loan ~. , # Personal.Loan은 Target으로 제외 
+                                    data=UB.trd)  
+testm        <- sparse.model.matrix(Personal.Loan ~. , # Personal.Loan은 Target으로 제외 
+                                    data=UB.ted)  
+
+# For xgb.train
+train_matrix <- xgb.DMatrix(data=as.matrix(trainm), label=UB.trd$Personal.Loan)
+test_matrix  <- xgb.DMatrix(data=as.matrix(testm), label=UB.ted$Personal.Loan)
+
+```
+
+```{r}
+# Parameters
+xgb_params <- list(objective = "binary:logistic", # Target 형태에 따른 분석방법 지정
+                   eta = 0.01,                    # Learning Rate
+                   gamma = 0,                     # 분할하기 위해 필요한 최소 손실 감소/ 클수록 분할이 쉽게 일어나지 않음
+                   max_depth = 5,                 # Tree의 최대 깊이
+                   min_child_weight = 1,          # 하나의 leaf node가 가져야할 최소 가중치/ 만약 가중치보다 작으면 분할이 일어나지 않음
+                   subsample = 1,                 # 원 Data로부터 모형 구축시 사용할 Sample 비율/ 1이면 그냥 원 Data
+                   lambda = 1)                    # Regularization
+
+
+watchlist <- list(train=train_matrix)
+
+set.seed(100)
+UB.xgb <- xgb.train(params = xgb_params,          # List 형식의 모수 조합
+                    data=train_matrix,            # xgb.DMatrix 형식의 데이터
+                    nrounds = 50,                 # nrounds : 최대 반복 수 
+                    watchlist = watchlist) 
+
+
+```
+
+
+### **5-1-1. 변수 중요도**
+
+```{r}
+# 변수 중요도
+importance <- xgb.importance(feature_names = colnames(trainm), model = UB.xgb)
+head(importance)
+xgb.plot.importance(importance_matrix = importance)
+
+```
+
+
+### **5-1-2. Training Data Error Plot**
+
+```{r}
+plot(UB.xgb$evaluation_log$train_error, 
+     col="blue", type="l", xlab="iter", ylab="Error")
+         
+```
+
+
+----------
+
+## **5-2. 모형 평가**
+
+```{r}
+# 적합된 모형에 대하여 Test Data 예측
+UB.pred.xgb <- predict(UB.xgb, test_matrix)  # "1"에 대한 예측 확률
+
+```
+
+
+### **ConfusionMatrix**
+
+```{r}
+cv <- 0.5                                                       # cutoff value
+
+pp <- as.factor(ifelse(UB.pred.xgb>cv,"yes","no"))              # 예측 확률>cv이면 "yes" 아니면 "no" 
+
+confusionMatrix(pp, UB.ted$Personal.Loan, positive="yes")       # confusionMatrix(예측 클래스, 실제 클래스, positive = "관심 클래스")
+
+
+```
+
+<br />
+
+### **ROC 곡선**
+
+
+#### **1) Package "pROC"**
+```{r}
+pacman::p_load("pROC")                          
+
+ac     <- UB.ted$Personal.Loan                              # 실제 클래스
+pp     <- UB.pred.xgb                                       # "1=yes"에 대한 예측 확률 출력
+
+
+xgb.roc <- roc(ac, pp, plot=T, col="red")                   # roc(실제 클래스, 예측 확률)
+
+auc <- round(auc(xgb.roc), 3)                               # AUC 
+legend("bottomright",legend=auc, bty="n")
+
+detach(package:pROC)
+
+```
+
+<br />
+
+#### **2) Package "Epi"**
+
+```{r}
+# install.packages("Epi")
+pacman::p_load("Epi")                        
+# install_version("etm", version = "1.1", repos = "http://cran.us.r-project.org")
+
+ROC(pp,ac, plot="ROC")       # ROC(예측 확률 , 실제 클래스)                                
+
+detach(package:Epi)
+```
+
+<br />
+
+#### **3) Package "ROCR"**
+
+```{r}
+pacman::p_load("ROCR")                      
+
+xgb.pred <- prediction(pp, ac)                      # prediction(예측 확률, 실제 클래스)
+
+xgb.perf <- performance(xgb.pred, "tpr", "fpr")     # performance(, "민감도", "1-특이도")                      
+plot(xgb.perf, col="red")                           # ROC Curve
+abline(0,1, col="black")
+
+
+perf.auc <- performance(xgb.pred, "auc")            # AUC        
+
+auc <- attributes(perf.auc)$y.values                  
+legend("bottomright",legend=auc,bty="n") 
+
+```
+
+<br />
+
+
+### **향상 차트**
+
+
+#### **1) Package "ROCR"**
+
+```{r}
+xgb.lift <- performance(xgb.pred,"lift", "rpp")      # Lift chart
+plot(xgb.lift, colorize=T, lwd=2)			
+
+
+detach(package:ROCR)
+```
+
+<br />
+
+#### **2) Package "lift"**
+
+```{r}
+# install.packages("lift")
+pacman::p_load("lift")
+
+ac.numeric <- ifelse(UB.ted$Personal.Loan=="yes",1,0)     # 실제 클래스를 수치형으로 변환
+
+plotLift(pp, ac.numeric, cumulative = T, n.buckets =24)   # plotLift(예측 확률, 실제 클래스)
+TopDecileLift(pp, ac.numeric)                             # Top 10% 향상도 출력
+
+detach(package:lift)
+```
+
+
+----------
+
+# **6. 모형 비교**
+
+```{r}
+plot(ada.roc, col="red")         # ROC Curve
+par(new=TRUE)
+plot(gbm.roc, col="green")       # ROC Curve
+par(new=TRUE)
+plot(xgb.roc, col="orange")      # ROC Curve
+
+legend("bottomright", legend=c("AdaBoost", "GBM", "XGBoost" ),
+       col=c( "red", "green", "orange"), lty=c(1,1,1))
+
+```
+
