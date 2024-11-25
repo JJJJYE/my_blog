@@ -2,13 +2,13 @@
 title: "About this blog"
 ---
 
-# Yeongeun Jeon
+# Young Eun Jeon
 
 <center>
-  ![](images/그림1.jpg){width=50%}
+  ![](images/profile.png){width=50%}
 </center>
 
-Welcome to my blog! This is the personal blog of Yeongeun Jeon, coming to you from Korea. 
+Welcome to my blog! This is the personal blog of Young Eun Jeon, coming to you from Korea. 
 This is where I'm going to record what I'm studying, especially the analyses using R. 
 
 To give you a brief introduction of me,
@@ -29,7 +29,7 @@ To give you a brief introduction of me,
 
 - [Estimation for a half-triangular distribution based on unified hybrid censored sample (2018)](http://www.kdiss.org/journal/view.html?uid=2446&page=&sort=&scale=10&all_k=&s_t=&s_a=Young+Eun+Jeon&s_k=&s_v=&s_n=&spage=&pn=search&year=&vmd=Full)
 
-- [Estimation of the exponentiated half-logistic distribution based on multiply Type-I hybrid censoring (2019)](http://www.csam.or.kr/journal/view.html?doi=10.29220/CSAM.2020.27.1.047)
+- [Estimation of the exponentiated half-logistic distribution based on multiply Type-I hybrid censoring (2020)](http://www.csam.or.kr/journal/view.html?doi=10.29220/CSAM.2020.27.1.047)
 
 - ARIMA모형과 DLM을 이용한 테러 발생 건수 예측 (2020), Korean terrorism studies Review, 13, 102-114.
 
@@ -56,3 +56,5 @@ To give you a brief introduction of me,
 - [Enhancing the predictive performance of non-stationary time series data through various transformations (2024)](http://www.kdiss.org/journal/view.html?uid=2970&&vmd=Full)
 
 - [Pivotal-based inference for a Pareto distribution under the adaptive progressive Type-II censoring scheme (2024)](https://www.aimspress.com/article/doi/10.3934/math.2024295)
+
+- [Predictive analysis of doubly Type-II censored models (2024)](https://www.aimspress.com/article/doi/10.3934/math.20241383?viewType=HTML)
