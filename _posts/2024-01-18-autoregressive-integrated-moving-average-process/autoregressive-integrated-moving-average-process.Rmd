@@ -1,0 +1,318 @@
+---
+title: "Autoregressive Integrated Moving Average Process"
+description: |
+  Description for Autoregressive Integrated Moving Average Process
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2024-01-18
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  max-width: 910px;
+  overflow-x: auto;
+  overflow-y: auto;
+  
+}
+
+pre, code {white-space:pre !important; overflow-x:auto !important}
+
+p, ul, li{
+text-align: justify
+  }
+
+# ul {
+#  list-style-position: inside;
+#   display: flex;
+#   flex-direction: column;
+#   width: 100%;
+# }
+# 
+# li {
+#   float: justify;
+#   min-width:200px;
+# }
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+- **참고 : Statistics and Data Analysis for Financial Engineering**
+
+# **1. 함수 설명**
+
+- 관측된 시계열에 자기회귀누적이동평균모형(Autoregressive Integrated Moving Average Model)을 구축하는 데 유용한 함수를 요약하면 다음과 같다.
+
+|함수|설명|
+|:----|:----|
+|`arima()`| ARIMA모형의 차수 $p$와 $q$, 차분 수 $d$를 지정하여 모형 구축|
+|`auto.arima()`| 모형의 차수 지정없이 자동적으로 최적화된 모형 구축|
+|`acf()`|상관도표그림|
+|`pacf()`|부분상관도표그림|
+|`Box.test()`|Ljung-Box Test|
+|`checkresiduals()`| 잔차가 백색잡음과정의 가정을 만족하는지 확인할 때 사용|
+|`forecast()`| 예측|
+
+---------------
+
+# **2. Random Walk and Momentum Plot**
+
+```{r}
+# AR(1)과정을 따르는 시계열 생성
+set.seed(4631)
+y1 <- arima.sim(n = 500,                 # 생성하고자하는 시계열 개수
+               list(ar = c(0.4)))        # AR(1)과정 : Y_t = 0.4Y_{t-1}
+y1
+
+y2 <- cumsum(y1)                         # cumsum : 누적합
+y3 <- cumsum(y2)
+
+par(mfrow=c(3, 1))                       # 3개의 그래프를 한 화면에 출력
+plot(y1, type = "l", 
+     ylab = expression(y[1]),
+     lwd = 1, main = "(a)")
+plot(y2, type = "l",
+     xlab = "Time", ylab = expression(y[2]),
+     lwd = 1, main = "(b)")
+plot(y3, type = "l",
+     xlab = "Time", ylab = expression(y[3]),
+     lwd = 1, main = "(c)")
+```
+
+`Result!` (a) 그래프는 평균 0 근처에서 무작위로 변하며, 정상시계열로 보인다.  
+(b) 그래프는 Random Walk로 보인다. → 1차 차분 필요  
+(c) 그래프는 Momentum (위 또는 아래로 움직이기 시작하면 그 방향으로 계속 움직이는 경향)으로 보인다. → 2차 차분 필요 
+
+---------------
+
+# **3. CPI 데이터셋**
+
+CSV 파일에 저장되어 있는 CPI (계절 조정된 미국의 소비자 물가 지수) 데이터셋은 1913년 1월 31일부터 2001년 11월 30일까지 월별 CPI가 기록되어져 있다. 
+
+```{r}
+# 데이터 불러오기
+CPI.dat <- read.csv("C:/Users/User/Desktop/CPI.dat.csv")
+CPI.dat
+
+# 1977-01-31 ~ 1987-12-31 CPI만 추출
+CPI <- as.matrix(CPI.dat$CPI)[769:900,]  
+CPI
+
+# log(CPI)를 차분
+CPI_diff1 <- as.matrix(diff(log(CPI), 
+                            diff = 1))           # 1번 차분
+CPI_diff1
+
+CPI_diff2 <- as.matrix(diff(log(CPI), 
+                            diff = 2))           # 2번 차분
+CPI_diff2
+```
+
+`Caution!` 함수 `diff()`를 이용하여 시계열을 차분할 수 있으며, 옵션 `diff`에 차분 횟수를 입력하면 된다.
+
+-----------
+
+```{r}
+par(mfrow=c(3, 1))                               # 3개의 그래프를 한 화면에 출력
+plot(ts(log(CPI),                                # log(CPI)를 ts로 변환       
+        start = c(1977, 1),                      # 시계열의 시작 날짜 / c(1977, 1) : 1977년 1월
+        frequency = 12),                         # 주기 / 12 : 월별 시계열로 1년에 12번 관측
+     xlab = "year", ylab = "log(CPI)",           # 축 이름
+     type = "b",                                 # 점과 선을 함께 표시
+     main = "(a)")                               # 제목
+plot(ts(as.vector(CPI_diff1),                    # log(CPI)를 1번 차분한 시계열을 ts로 변환   
+        start = c(1977, 2),                      # 시계열의 시작 날짜 / c(1977, 2) : 1977년 2월
+        frequency = 12),                         
+     xlab = "year", ylab = expression(paste(Delta," log(CPI)")),
+     type = "b",
+     main = "(b)")
+plot(ts(as.vector(CPI_diff2),                    # log(CPI)를 2번 차분한 시계열을 ts로 변환 
+        start = c(1977, 3),                      # 시계열의 시작 날짜 / c(1977, 3) : 1977년 3월
+        frequency = 12),  
+     xlab ="year", ylab = expression(paste(Delta^2," log(CPI)")), 
+     type = "b", 
+     main = "(c)")
+```
+
+`Caution!` 함수 `ts()`를 이용하여 시계열 객체로 변환할 수 있으며, 옵션 `start`에는 시계열의 시작 날짜, 옵션 `frequency`에는 주기를 입력한다.  
+`Result!` (a) 그래프를 통해 원 시계열 log(CPI)는 Momentum 현상을 보인다는 것을 알 수 있다.  
+(b) 그래프를 통해 1번 차분한 log(CPI)는 Momentum 현상은 보이지 않으나, 시간이 흐름에 따라 평균이 변한다는 것을 알 수 있다.  
+(c) 그래프를 통해 2번 차분한 log(CPI)는 시간이 흐름에 따라 평균이 0에서 변하지 않는다는 것을 알 수 있다.
+
+---------------
+
+## **3-1. ARIMA 모형**
+
+```{r}
+# 2번 차분한 log(CPI)에 MA(2) 모형 구축
+fit_ma <- arima(CPI_diff2,
+                order = c(0, 0, 2))              # (p, d, q)
+
+fit_ma
+```
+
+`Result!` 2번 차분한 log(CPI)에 대해 구축된 MA(2) 모형, 즉, 원 시계열 log(CPI)에 대해 구축된 ARIMA(0,2,2) 모형은 $(1-B)^2Y_t=\epsilon_t-0.3433\epsilon_{t-1}-0.3694\epsilon_{t-2}$이다. 
+
+-----------
+
+```{r}
+# 잔차를 이용한 모형 진단
+Box.test(fit_ma$resid,                           # 잔차
+         lag = 20, 
+         type = "Ljung-Box",
+         fitdf = 2)                              # 추정된 theta 개수
+```
+
+`Result!` 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(20)=0$에 대한 검정 결과에 따르면, $p$값이 0.07983이므로 유의수준 0.05에서 $p$값이 0.05보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 잔차에 대해 시차 20까지의 자기상관계수 $\rho(1), \rho(2), \cdots, \rho(20)$ 중 유의한 자기상관계수가 적어도 1개 존재한다는 증거가 부족하며, 2번 차분한 log(CPI)에 대해 MA(2) 모형을 가정하는 것이 적절하다.
+
+-----------
+
+```{r}
+par(mfrow=c(2,2))                                # 1행에 2개의 그래프를 출력 -> 총 2개의 행으로 4개의 그래프가 출력됨
+acf(log(CPI),main = "(a) log(CPI)")
+acf(CPI_diff1, main = expression(paste("(b) ",Delta," log(CPI)")))
+acf(CPI_diff2, main = expression(paste("(c) ",Delta^2," log(CPI)")))
+acf(fit_ma$resid, main = "(d) residuals, ARIMA(0,2,2)")
+```
+
+`Result!` (a) 그래프를 통해 원 시계열 log(CPI)의 자기상관계수 ACF는 천천히 감소하고 있다는 것을 알 수 있으며, 이는 원 시계열이 비정상시계열임을 의미한다.  
+(c) 그래프를 통해 2번 차분한 log(CPI)의 자기상관계수 ACF는 처음 2개의 시차에서 큰 자기상관을 가지고, 그 이후는 작은 자기상관을 가진다는 것을 알 수 있다.  
+(d) 그래프를 통해 2번 차분한 log(CPI)에 구축된 MA(2) 모형의 잔차는 자기상관이 존재하지 않다는 것을 알 수 있다. 이는 2번 차분한 log(CPI)에 MA(2) 모형, 즉, 원 시계열 log(CPI)에 ARIMA(0,2,2) 모형을 가정하는 것이 적절하다는 것을 의미한다.
+
+---------------
+
+# **4. Mishkin 데이터셋**
+
+Package `"Ecdat"`에서 제공하는 Mishkin 데이터셋은 1950년 2월부터 1990년 12월 사이에 인플레이션율에 대한 시계열 데이터셋이다.
+
+```{r}
+# 패키지 설치
+pacman::p_load("Ecdat")
+
+# 데이터 불러오기
+data(Mishkin, package = "Ecdat")
+y <- as.vector(Mishkin[,1])             # 월별 인플레이션율 추출
+y
+
+# 시계열 그림
+plot(y, type = "l")
+```
+
+`Result!` 시간의 흐름에 따라 평균이 변하므로 원 시계열은 비정상시계열임이 의심된다.
+
+----------
+
+## **4-1. 단위근 검정**
+
+```{r}
+# 패키지 설치
+pacman::p_load("tseries")
+
+# Dickey-Fuller test
+adf.test(y)
+# Phillips-Perron test
+pp.test(y)
+# KPSS test
+kpss.test(y)
+```
+
+`Caution!` 단위근 검정을 수행하기 위해 Package `"tseries"`에서 제공하는 함수 `adf.test()`, `pp.test()`, `kpss.test()`를 사용한다.  
+`Result!` 1. Dickey-Fuller test를 수행했을 때, $p$값이 0.01576이므로 유의수준 0.05에서 $p$값이 0.05보다 작기 때문에 귀무가설을 기각한다. 즉, 관측된 시계열은 정상성을 만족한다.  
+2. Phillips-Perron test를 수행했을 때, $p$값이 0.01이므로 유의수준 0.05에서 $p$값이 0.05보다 작기 때문에 귀무가설을 기각한다. 즉, 관측된 시계열은 정상성을 만족한다.  
+3. KPSS test를 수행했을 때, $p$값이 0.01이므로 유의수준 0.05에서 $p$값이 0.05보다 작기 때문에 귀무가설을 기각한다. 즉, 단위근이 존재하므로 관측된 시계열은 비정상성을 가진다.
+
+---------
+
+## **4-2. ARIMA 모형 구축**
+
+```{r}
+# 패키지 설치
+pacman::p_load("forecast")
+
+auto.arima(y,
+           max.p = 5, max.q = 5, 
+           ic = "bic")              # BIC 기준으로 BIC가 가장 작은 모형을 최적 모형으로 선택
+
+# ARIMA(1,1,1) 모형 구축
+fitARIMA111 <- arima(y, c(1, 1, 1))
+```
+
+`Result!` 함수 `auto.arima()`를 이용하여 BIC 기준으로 최적의 모형을 판단했을 때, ARIMA(1,1,1) 모형이 선택되었다. 추정된 모수 결과를 이용하면 구축된 ARIMA(1,1,1) 모형은 $(1-B)Y_t = 0.2383Y_{t-1}+\epsilon_t -0.8772\epsilon_{t-1}$이다.
+
+-----------
+
+```{r}
+# 잔차를 이용한 모형 진단
+par(mfrow=c(1,1))
+acf(fitARIMA111$resid)            
+Box.test(fitARIMA111$resid,
+         lag = 15,
+         fitdf = 2)                # 추정한 phi와 theta 개수
+```
+
+`Result!` 잔차의 자기상관계수 ACF 그래프를 보면 시차 0을 제외하고 막대의 끝이 파란색 선을 넘어가지 않으므로 다른 시차에서 자기상관계수가 통계적으로 유의하다는 증거가 부족하다.  
+“Ljung-Box” 검정 결과에 따르면, 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(15)=0$에 대해 $p$값이 0.3435이므로 유의수준 0.05에서 $p$값이 0.05보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 잔차에 대해 시차 15까지의 자기상관계수 $\rho(1), \rho(2), \cdots, \rho(15)$ 중 유의한 자기상관계수가 적어도 1개 존재한다는 증거가 부족하며, 해당 시계열에 대해 ARIMA(1,1,1) 모형을 가정하는 것이 적절하다.
+
+-----------
+
+## **4-3. 예측**
+
+```{r}
+pred <- forecast(fitARIMA111,
+                 h = 100)          # 미래 100시점까지 예측
+pred
+
+plot(pred)
+```
+
+`Caution!` 예측은 Package `"forecast"`에서 제공하는 함수 `forecast()`를 이용하여 수행할 수 있다.  
+`Result!` 원 시계열은 비정상성을 가지기 때문에 예측 구간은 발산한다는 것을 알 수 있다.
+
+-----------
+
+```{r}
+# 1번 차분한 시계열에 대한 예측
+## 시계열 그림
+plot(diff(y), type = "l")
+```
+
+`Result!` 1번 차분한 시계열은 시간의 흐름에 따라 평균이 변하지 않고 분산도 일정해 보이므로 정상시계열로 보인다.
+
+-----------
+
+```{r}
+# 1번 차분한 시계열에 MA(3) 모형 구축
+fit_diff <- arima(diff(y),
+                  order = c(0, 0, 3))
+
+# 잔차를 이용한 모형 진단
+acf(fit_diff$resid)            
+Box.test(fit_diff$resid,
+         lag = 15,
+         fitdf = 3)  
+```
+
+`Result!` 잔차의 자기상관계수 ACF 그래프를 보면 시차 0을 제외하고 막대의 끝이 파란색 선을 넘어가지 않으므로 다른 시차에서 자기상관계수가 통계적으로 유의하다는 증거가 부족하다.  
+“Ljung-Box” 검정 결과에 따르면, 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(15)=0$에 대해 $p$값이 0.3444이므로 유의수준 0.05에서 $p$값이 0.05보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 잔차에 대해 시차 15까지의 자기상관계수 $\rho(1), \rho(2), \cdots, \rho(15)$ 중 유의한 자기상관계수가 적어도 1개 존재한다는 증거가 부족하며, 해당 시계열에 대해 MA(3) 모형을 가정하는 것이 적절하다. 이는 1번 차분한 시계열은 정상시계열임을 의미한다.
+
+-----------
+
+```{r}
+# 예측
+pred.diff <- forecast(fit_diff,
+                      h = 100)          # 미래 100시점까지 예측
+pred.diff
+
+plot(pred.diff)
+```
+
+`Result!` 원 시계열을 1번 차분한 시계열은 정상성을 가지기 때문에 예측 구간은 수렴한다는 것을 알 수 있다.

@@ -1,0 +1,235 @@
+---
+title: "Autoregressive Moving Average Process"
+description: |
+  Description for Autoregressive Moving Average Process
+author:
+  - name: Yeongeun Jeon
+  - name: Jung In Seo
+date: 2024-01-13
+categories: Time Series
+output: 
+  distill::distill_article:
+        toc: TRUE
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  max-width: 910px;
+  overflow-x: auto;
+  overflow-y: auto;
+  
+}
+
+pre, code {white-space:pre !important; overflow-x:auto !important}
+
+p, ul, li{
+text-align: justify
+  }
+
+# ul {
+#  list-style-position: inside;
+#   display: flex;
+#   flex-direction: column;
+#   width: 100%;
+# }
+# 
+# li {
+#   float: justify;
+#   min-width:200px;
+# }
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+options(width=200)
+```
+
+
+- **참고 : Statistics and Data Analysis for Financial Engineering**
+
+
+# **1. 함수 설명**
+
+- 관측된 시계열에 자기회귀이동평균모형(Autoregressive Moving Average Model)을 구축하는 데 유용한 함수를 요약하면 다음과 같다.
+
+|함수|설명|
+|:----|:----|
+|`arima()`| ARMA모형의 차수 $p$와 $q$를 지정하여 모형 구축|
+|`auto.arima()`| 모형의 차수 지정없이 자동적으로 최적화된 모형 구축|
+|`acf()`|상관도표그림|
+|`pacf()`|부분상관도표그림|
+|`Box.test()`|Ljung-Box Test|
+|`checkresiduals()`| 잔차가 백색잡음과정의 가정을 만족하는지 확인할 때 사용|
+|`forecast()`| 예측|
+
+---------------
+
+# **2. 예제**
+
+## **2-1. BMW 데이터셋**
+
+- Package `"evir"`에서 제공하는 BMW 데이터셋은 1973년 1월부터 1996년 7월 사이에 BMW 주식의 일별 로그 수익률에 대한 시계열 데이터셋이다.
+
+```{r}
+# 패키지 설치
+pacman::p_load("evir")
+
+# 데이터 불러오기
+data(bmw, package = "evir")
+
+# 시계열 그림
+plot(bmw, type = "l")
+```
+
+`Result!` 증가하거나 감소하는 추세가 없어서 시간의 흐름에 따라 평균이 일정하다.  
+
+----------
+
+```{r}
+# 상관도표그림
+acf(bmw)
+```
+
+`Result!` 시차 1에서 막대의 끝이 파란색 선을 넘어가므로 시차 1에 대해 유의한 자기상관관계가 존재한다.
+
+----------
+
+```{r}
+# 부분상관도표그림
+pacf(bmw)
+```
+
+`Result!` 시차 1에서 막대의 끝이 파란색 선을 넘어가므로 시차 1에 대해 유의한 부분자기상관관계가 존재한다.  
+`Caution!` 큰 시차에서의 막대 끝이 파란색 선을 넘어가는 것은 우연 변동에 의한 가능성이 높다.
+
+----------
+
+```{r}
+# Ljung-Box Test
+Box.test(bmw, lag = 5,
+         type = "Ljung-Box")
+```
+
+`Result!` 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(5)=0$에 대한 검정 결과에 따르면, $p$값이 0에 가까우므로 유의수준 0.05에서 귀무가설을 기각한다. 즉, 관측된 시계열에 대해 $\rho(1), \rho(2),\cdots,\rho(5)$ 중 유의한 자기상관관계가 적어도 1개 존재한다.
+
+----------
+
+```{r}
+# Fit ARMA(1,1)
+ARMA.bmw <- arima(bmw, 
+                  order = c(1, 0, 1)) 
+```
+
+`Caution!` 함수 `arima()`를 이용하여 ARMA(1,1) 모형을 구축하려면 옵션 `order = c(1, 0, 1)`을 입력한다. 만약, ARMA($p,q$) 모형을 구축하려면 옵션 `order = c(p, 0, q)`을 입력하면 된다.  
+
+----------
+
+```{r}
+# 모형 추정 결과
+print(ARMA.bmw)
+```
+
+`Result!` 출력 결과를 요약하면 다음과 같다.  
+1. 모수의 추정치는 $\hat{\mu}=0.0004$, $\hat{\phi}=-0.2278$, $\hat{\theta}=0.3122$, $\hat{\sigma}^2_\epsilon = 0.0002161$이다. 이를 이용하면 관측된 시계열에 대해 구축된 ARMA(1,1) 모형은 $Y_t-0.0004 = -0.2278(Y_{t-1}-0.0004)+ \epsilon_t + 0.3122\epsilon_{t-1}$이다.  
+
+----------
+
+```{r}
+# 잔차를 이용한 백색잡음과정 체크
+pacman::p_load("forecast")
+
+checkresiduals(ARMA.bmw)
+```
+
+`Caution!` Package `"forecast"`의 함수 `checkresiduals()`를 이용하여 잔차에 대한 모형 진단을 수행할 수 있다.  
+`Result!` 출력 그래프를 보면, 첫 번째 그래프는 잔차가 추세를 가지는지, 등분산성을 만족하는지 알 수 있다.  ACF 그래프를 통해서는 잔차가 자기상관관계를 가지는지 알 수 있으며, 히스토그램을 통해 잔차가 좌우대칭 종 모양의 정규분포를 따르는지 알 수 있다.  
+"Ljung-Box" 검정 결과에 따르면, 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(10)=0$에 대해 $p$값이 0.1345이므로 유의수준 0.05에서 $p$값이 0.05보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 잔차에 대해 시차 10까지의 자기상관계수 $\rho(1), \rho(2), \cdots, \rho(10)$ 중 유의한 자기상관계수가 적어도 1개 존재한다는 증거가 부족하며, 해당 시계열에 대해 ARMA(1,1) 모형을 가정하는 것이 적절하다.
+
+------------
+
+## **2-2. Mishkin 데이터셋**
+
+- Package `"Ecdat"`에서 제공하는 Mishkin 데이터셋은 1950년 2월부터 1990년 12월 사이에 인플레이션율에 대한 시계열 데이터셋이다.
+
+```{r}
+# 패키지 설치
+pacman::p_load("Ecdat")
+
+# 데이터 불러오기
+data(Mishkin, package = "Ecdat")
+y = as.vector(Mishkin[,1])             # 월별 인플레이션율 추출
+y
+
+# 시계열 그림
+plot(y, type = "l")
+```
+
+----------
+
+```{r}
+# 상관도표그림
+acf(y)
+```
+
+`Result!` 대부분의 시차에서 막대의 끝이 파란색 선을 넘어가므로 시차 25까지 유의한 자기상관관계가 존재한다.
+
+----------
+
+```{r}
+# 부분상관도표그림
+pacf(y)
+```
+
+`Result!` 시차 7까지 막대의 끝이 파란색 선을 넘어가므로 시차 7까지 유의한 부분자기상관관계가 존재한다.  
+
+----------
+
+```{r}
+# Ljung-Box Test
+Box.test(y, lag = 7,
+         type = "Ljung-Box")
+```
+
+`Result!` 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(7)=0$에 대한 검정 결과에 따르면, $p$값이 0에 가까우므로 유의수준 0.05에서 귀무가설을 기각한다. 즉, 관측된 시계열에 대해 $\rho(1), \rho(2),\cdots,\rho(7)$ 중 유의한 자기상관관계가 적어도 1개 존재한다.
+
+----------
+
+```{r}
+# Fit ARMA(1,1)
+ARMA.y <- arima(y, 
+                order = c(1, 0, 1)) 
+
+# 잔차를 이용한 백색잡음과정 체크
+checkresiduals(ARMA.y)
+```
+
+`Result!` ACF 그래프를 보면 시차 2에서 막대의 끝이 파란색 선을 넘어가므로 자기상관계수가 통계적으로 유의하다. 즉, 시차 2의 잔차들은 유의한 자기상관계수를 가지므로 백색잡음과정의 독립성 가정을 만족하지 않는다.  
+게다가, "Ljung-Box" 검정 결과에 따르면, 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(10)=0$에 대해 $p$값이 0.002549이므로 유의수준 0.05에서 $p$값이 0.05보다 작아 귀무가설을 기각한다. 즉, 잔차에 대해 시차 10까지의 자기상관계수 $\rho(1), \rho(2), \cdots, \rho(10)$ 중 유의한 자기상관계수가 적어도 1개 존재한다는 것을 의미하며, 해당 시계열에 대해 ARMA(1,1) 모형을 가정하는 것은 적절하지 않다.
+
+------------
+
+`Caution!` Package `"forecast"`에서 제공하는 함수 `auto.arima()`에 옵션 `max.p = 20, max.q = 20, d = 0`을 입력하여 최적의 ARMA($p,q$) 모형을 찾을 수 있다. 
+
+```{r}
+pacman::p_load("forecast")
+
+auto.y2 <- auto.arima(y, max.p = 20,        
+                      max.q = 20, d = 0, 
+                      ic = "aic")           # AIC 기준으로 AIC가 가장 작은 모형을 최적 모형으로 선택
+
+print(auto.y2)
+```
+
+`Result!` 관측된 시계열에 대해 AIC를 기준으로 최적의 모형은 ARMA(2,1) 모형이다.  모수 추정 결과에 따르면, $\hat{\mu} = 4.1068$, $\hat{\phi}_1=1.2074$, $\hat{\phi}_2=-0.2237$, $\hat{\theta}=-0.8573$, $\hat{\sigma}^2_\epsilon = 8.533$이다. 이를 이용하면 관측된 시계열에 대해 구축된 ARMA(2,1) 모형은 $Y_t-4.1068 = 1.2074(Y_{t-1}-4.1068)-0.2237(Y_{t-2}-4.1068)+\epsilon_t -0.8573\epsilon_{t-1}$이다.  
+
+------------------
+
+```{r}
+# 잔차를 이용한 백색잡음과정 체크
+checkresiduals(auto.y2)
+```
+
+`Result!` 히스토그램을 살펴보면, 왼쪽으로 치우친 그래프 모양임을 알 수 있다.  
+게다가, "Ljung-Box" 검정 결과에 따르면, 귀무가설 $H_0 : \rho(1)=\rho(2)=\cdots=\rho(10)=0$에 대해 $p$값이 0.4307이므로 유의수준 0.05에서 $p$값이 0.05보다 크기 때문에 귀무가설을 기각하지 못한다. 즉, 잔차에 대해 시차 10까지의 자기상관계수 $\rho(1), \rho(2), \cdots, \rho(10)$ 중 유의한 자기상관계수가 적어도 1개 존재한다는 증거가 부족하며, 해당 시계열에 대해 ARMA(2,1) 모형을 가정하는 것이 적절하다.
+

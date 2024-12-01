@@ -5,14 +5,14 @@
       "title": "About this blog",
       "author": [],
       "contents": "\r\nYoung Eun Jeon\r\n\r\n\r\nWelcome to my blog! This is the personal blog of Young Eun Jeon, coming to you from Korea.\r\nThis is where I’m going to record what I’m studying, especially the analyses using R.\r\nTo give you a brief introduction of me,\r\nB.S. Statistics, Yeungnam University, Korea, 2018.02\r\nPh.D student from Yeungnam University, Korea.\r\nInterests : Machine Learning/Deep Learning, Time series, Spatial statistics etc.\r\nProject\r\nVisualization Ver. 1\r\nVisualization Ver. 2\r\nMachine Learning (Binary Classification)\r\nMachine Learning (Multiclass Classification)\r\nLive Stocks Chart & Analysis Dashboard\r\nPaper\r\nEstimation for a half-triangular distribution based on unified hybrid censored sample (2018)\r\nEstimation of the exponentiated half-logistic distribution based on multiply Type-I hybrid censoring (2020)\r\nARIMA모형과 DLM을 이용한 테러 발생 건수 예측 (2020), Korean terrorism studies Review, 13, 102-114.\r\nEstimation for the half-logistic distribution based on multiply Type-II hybrid censoring (2020)\r\nBayesian estimation for the exponential distribution based on generalized multiply Type-II hybrid censoring (2020)\r\nNew approach for a Weibull distribution under the progressive Type-II censoring scheme (2020)\r\nEstimation of the Rayleigh Distribution under Unified Hybrid Censoring (2021)\r\nSpatio-temporal modeling to reduce women’s fear of crime (2022)\r\nHybrid predictive modeling for charging demand prediction of electric vehicles (2022)\r\nSpatio-temporal analysis with risk factors for five major violent crimes (2022)\r\nMaximum product of spacings under a generalized Type-II progressive hybrid censoring scheme (2022)\r\nPredictability model of the sea ice extent based on a machine learning technique (2023)\r\nNovel estimation based on a minimum distance under the progressive Type-II censoring scheme (2023)\r\nEnhancing the predictive performance of non-stationary time series data through various transformations (2024)\r\nPivotal-based inference for a Pareto distribution under the adaptive progressive Type-II censoring scheme (2024)\r\nPredictive analysis of doubly Type-II censored models (2024)\r\n\r\n\r\n\r\n",
-      "last_modified": "2024-11-26T00:20:15+09:00"
+      "last_modified": "2024-12-01T22:49:27+09:00"
     },
     {
       "path": "index.html",
       "title": "Posts",
       "author": [],
       "contents": "\r\n\r\n\r\n\r\n",
-      "last_modified": "2024-11-26T00:20:16+09:00"
+      "last_modified": "2024-12-01T22:49:29+09:00"
     }
   ],
   "collections": ["posts/posts.json"]
