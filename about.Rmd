@@ -14,7 +14,7 @@ This is where I'm going to record what I'm studying, especially the analyses usi
 To give you a brief introduction of me,
 
 - B.S. Statistics, Yeungnam University, Korea, 2018.02
-- Ph.D student from Yeungnam University, Korea.
+- Ph.D student from Yeungnam University, Korea, 2024,02.
 - Interests :  Machine Learning/Deep Learning, Time series, Spatial statistics etc.
 
 ## Project
@@ -24,6 +24,13 @@ To give you a brief introduction of me,
 - [Machine Learning (Binary Classification)](https://jjjjye.shinyapps.io/MachineLearning_Ver2/)
 - [Machine Learning (Multiclass Classification)](https://jjjjye.shinyapps.io/MachineLearning_Multinomial/)
 - [Live Stocks Chart & Analysis Dashboard](https://jjjjye.shinyapps.io/Stock_Analysis/)
+- [Earthquakes Dashboard](https://statisticsnr.shinyapps.io/Earthquakes/)
+
+## Book
+
+- [Data Mining](https://jjjjye.github.io/ML_book1/)
+- [Machine Learning with caret](https://jjjjye.github.io/ML_book2/)
+- [Time Series](https://jjjjye.github.io/TS/)
 
 ## Paper
 
@@ -58,3 +65,14 @@ To give you a brief introduction of me,
 - [Pivotal-based inference for a Pareto distribution under the adaptive progressive Type-II censoring scheme (2024)](https://www.aimspress.com/article/doi/10.3934/math.2024295)
 
 - [Predictive analysis of doubly Type-II censored models (2024)](https://www.aimspress.com/article/doi/10.3934/math.20241383?viewType=HTML)
+
+- [Objective Bayesian analysis using reparameterization for Type-II hybrid censored Rayleigh data (2024)](http://www.kdiss.org/journal/view.html?uid=3029&sort=book_Seq&scale=&key=year&keyword=&s_v=35&s_n=6&pn=vol&year=2024&vmd=Full)
+
+- [Predictive modeling based on a hybrid sampling strategy for an imbalanced heart failure dataset (2025)](http://www.kdiss.org/journal/view.html?uid=3058&pn=lastest&vmd=Full)
+
+- [Extreme value model under an adaptive progressive Type-II censoring: Application of a pivotal quantity (2025)](http://www.csam.or.kr/journal/view.html?uid=2193&&vmd=Full)
+
+- [Objective framework for Bayesian inference in multicomponent Pareto stress–strength model under an adaptive progressive Type-II censoring scheme (2025)](https://www.mdpi.com/2227-7390/13/9/1379)
+
+- [An integrated oversampling and noise reduction method for robust predictive analytics (2025)](https://www.sciencedirect.com/science/article/pii/S2772662225000682)
+
